@@ -1,0 +1,236 @@
+/* src/components/Login.css */
+:root {
+    --primary-color: #0d3e6e;
+    --secondary-color: #1a2530;
+    --accent-color: #3498db;
+    --text-light: #ffffff;
+    --text-muted: #aaaaaa;
+    --bg-dark: #0f1720;
+    --input-bg: #1e293b;
+    --error-color: #e74c3c;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, var(--secondary-color), var(--bg-dark));
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.login-container {
+    background-color: var(--bg-dark);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 350px;
+    overflow: hidden;
+    padding: 0px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.login-header {
+    padding: 20px 20px 10px;
+    text-align: center;
+}
+
+.logo-fish {
+    margin-bottom: 0px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.logo-fish img {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.logo-tagline {
+    font-size: 14px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
+
+.login-form {
+    padding: 25px 30px 30px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--text-light);
+    font-size: 14px;
+}
+
+.input-with-icon {
+    position: relative;
+}
+
+.input-with-icon i {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--primary-color);
+    z-index: 2;
+}
+
+.input-with-icon input {
+    width: 100%;
+    padding: 10px 10px 10px 35px;
+    background-color: var(--input-bg);
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    font-size: 15px;
+    transition: all 0.3s ease;
+    color: var(--text-light);
+}
+
+.input-with-icon input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+.input-with-icon input::placeholder {
+    color: #718096;
+}
+
+.input-with-icon input.error {
+    border-color: var(--error-color);
+}
+
+.login-btn {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, var(--primary-color), #1e4a76);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.login-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1e4a76, var(--primary-color));
+    transform: translateY(-2px);
+    box-shadow: 0 7px 14px rgba(0, 0, 0, 0.2);
+}
+
+.login-btn:active {
+    transform: translateY(0);
+}
+
+.login-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.forgot-password {
+    display: block;
+    text-align: center;
+    margin-top: 5px;
+    margin-bottom: 0;
+    color: var(--accent-color);
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 0.3s ease;
+}
+
+.forgot-password:hover {
+    color: #a0d2ff;
+    text-decoration: underline;
+}
+
+.divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--primary-color), transparent);
+    margin: 25px 0;
+    position: relative;
+}
+
+.divider::before {
+    content: "or";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg-dark);
+    padding: 0 15px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.signup-link {
+    text-align: center;
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.signup-link a {
+    color: var(--accent-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.signup-link a:hover {
+    color: #a0d2ff;
+    text-decoration: underline;
+}
+
+.error-message, .error-text {
+    color: var(--error-color);
+    font-size: 13px;
+    margin-top: 5px;
+    display: block;
+}
+
+@media (max-width: 480px) {
+    .login-container {
+        max-width: 100%;
+    }
+    
+    .login-form {
+        padding: 20px;
+    }
+    
+    .logo-fish img {
+        width: 100px;
+        height: 100px;
+    }
+}
+
+/* Reduced motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

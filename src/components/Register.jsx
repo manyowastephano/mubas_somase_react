@@ -1,0 +1,609 @@
+// src/components/Register.js
+import React, { useState, useCallback, lazy, Suspense } from 'react';
+import { Helmet } from 'react-helmet';
+import Swal from 'sweetalert2';
+import './Register.css';
+import somaselogo from '../images/somase-logo.jpeg';
+// Import the getCookie function
+import { getCookie } from '../utils/csrf';
+import { Link } from 'react-router-dom';
+import { BASE_URL } from '../config';
+
+// Lazy load components for better performance
+const PasswordStrengthMeter = lazy(() => import('./PasswordStrengthMeter'));
+const ImageUploadPreview = lazy(() => import('./ImageUploadPreview'));
+
+const Register = () => {
+    const [formData, setFormData] = useState({
+        username: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        profilePhoto: null
+    });
+    const [errors, setErrors] = useState({});
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [fileName, setFileName] = useState('No file chosen');
+    const [isRegistered, setIsRegistered] = useState(false);
+
+    // Memoize handlers to prevent unnecessary re-renders
+    const handleChange = useCallback((e) => {
+        const { name, value, files } = e.target;
+        if (name === 'profilePhoto') {
+            setFormData(prev => ({ ...prev, [name]: files[0] }));
+            setFileName(files[0] ? files[0].name : 'No file chosen');
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+            
+            // Clear error when user types
+            if (errors[name]) {
+                setErrors(prev => ({ ...prev, [name]: '' }));
+            }
+            
+            // Clear general errors when user types in any field
+            if (errors.general) {
+                setErrors(prev => ({ ...prev, general: '' }));
+            }
+            
+            // Password matching validation
+            if (name === 'confirmPassword' || name === 'password') {
+                const passwordValue = name === 'password' ? value : formData.password;
+                const confirmValue = name === 'confirmPassword' ? value : formData.confirmPassword;
+                
+                if (passwordValue !== confirmValue && confirmValue) {
+                    setErrors(prev => ({ ...prev, confirmPassword: 'Passwords do not match' }));
+                } else if (errors.confirmPassword) {
+                    setErrors(prev => ({ ...prev, confirmPassword: '' }));
+                }
+            }
+        }
+    }, [errors, formData.password, formData.confirmPassword]);
+
+    const validateForm = useCallback(() => {
+        const newErrors = {};
+        
+        if (!formData.username.trim()) {
+            newErrors.username = 'Username is required';
+        } else if (formData.username.length < 3) {
+            newErrors.username = 'Username must be at least 3 characters';
+        } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+            newErrors.username = 'Username can only contain letters, numbers, and underscores';
+        }
+        
+        if (!formData.email) {
+            newErrors.email = 'Email is required';
+        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+            newErrors.email = 'Email address is invalid';
+        }
+        
+        if (!formData.password) {
+            newErrors.password = 'Password is required';
+        } else if (formData.password.length < 8) {
+            newErrors.password = 'Password must be at least 8 characters';
+        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
+            newErrors.password = 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
+        }
+        
+        if (!formData.confirmPassword) {
+            newErrors.confirmPassword = 'Please confirm your password';
+        } else if (formData.password !== formData.confirmPassword) {
+            newErrors.confirmPassword = 'Passwords do not match';
+        }
+        
+        // Validate profile photo if provided
+        if (formData.profilePhoto) {
+            const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!validImageTypes.includes(formData.profilePhoto.type)) {
+                newErrors.profilePhoto = 'Please upload a valid image (JPEG, PNG, GIF, or WebP)';
+            } else if (formData.profilePhoto.size > 5 * 1024 * 1024) { // 5MB limit
+                newErrors.profilePhoto = 'Image size must be less than 5MB';
+            }
+        }
+        
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    }, [formData]);
+
+    const handleSubmit = useCallback(async (e) => {
+        e.preventDefault();
+        
+        if (!validateForm()) return;
+        
+        setIsSubmitting(true);
+        setErrors({}); // Clear previous errors
+        
+        try {
+            const data = new FormData();
+            data.append('username', formData.username);
+            data.append('email', formData.email);
+            data.append('password', formData.password);
+            data.append('password2', formData.confirmPassword);
+            if (formData.profilePhoto) {
+                data.append('profile_photo', formData.profilePhoto);
+            }
+            
+            // Get CSRF token
+            const csrftoken = getCookie('csrftoken');
+            
+            const response = await fetch(`${BASE_URL}/register/`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                },
+                body: data,
+            });
+            
+            let responseData;
+            try {
+                responseData = await response.json();
+            } catch (jsonError) {
+                throw new Error('Server returned an invalid response. Please try again later.');
+            }
+            
+            if (response.ok) {
+                // Set registered state to true
+                setIsRegistered(true);
+                
+                // Use SweetAlert2 for success message
+                await Swal.fire({
+                    title: 'Success!',
+                    html: 'Registration successful! Please check your MUBAS email to verify your account. You will be automatically logged in after verification.',
+                    icon: 'success',
+                    confirmButtonColor: '#0d3e6e',
+                    confirmButtonText: 'OK',
+                    timer: 7000,
+                    timerProgressBar: true
+                });
+            } else {
+                // Handle different types of server errors
+                let newErrors = {};
+                
+                if (response.status >= 500) {
+                    // Server error
+                    newErrors.general = 'Server error. Please try again later.';
+                } else if (response.status === 400) {
+                    // Check if we have the new error format with a simple error message
+                    if (responseData.error) {
+                        newErrors.general = responseData.error;
+                        
+                        // Also check if we have details for specific field errors
+                        if (responseData.details && Array.isArray(responseData.details)) {
+                            responseData.details.forEach(detail => {
+                                if (detail.includes('username')) {
+                                    newErrors.username = detail.replace('username: ', '');
+                                } else if (detail.includes('email')) {
+                                    newErrors.email = detail.replace('email: ', '');
+                                } else if (detail.includes('password')) {
+                                    newErrors.password = detail.replace('password: ', '');
+                                }
+                            });
+                        }
+                    } else {
+                        // Fallback to old error handling for compatibility
+                        for (let key in responseData) {
+                            if (key === 'username') {
+                                if (typeof responseData[key] === 'string') {
+                                    newErrors.username = responseData[key];
+                                } else if (Array.isArray(responseData[key])) {
+                                    newErrors.username = responseData[key].join(' ');
+                                }
+                            } else if (key === 'email') {
+                                if (typeof responseData[key] === 'string') {
+                                    newErrors.email = responseData[key];
+                                } else if (Array.isArray(responseData[key])) {
+                                    newErrors.email = responseData[key].join(' ');
+                                }
+                            } else if (key === 'password') {
+                                if (typeof responseData[key] === 'string') {
+                                    newErrors.password = responseData[key];
+                                } else if (Array.isArray(responseData[key])) {
+                                    newErrors.password = responseData[key].join(' ');
+                                }
+                            } else if (key === 'profile_photo') {
+                                if (typeof responseData[key] === 'string') {
+                                    newErrors.profilePhoto = responseData[key];
+                                } else if (Array.isArray(responseData[key])) {
+                                    newErrors.profilePhoto = responseData[key].join(' ');
+                                }
+                            } else if (key === 'non_field_errors') {
+                                if (typeof responseData[key] === 'string') {
+                                    newErrors.general = responseData[key];
+                                } else if (Array.isArray(responseData[key])) {
+                                    newErrors.general = responseData[key].join(' ');
+                                }
+                            } else {
+                                // For any other field errors
+                                if (typeof responseData[key] === 'string') {
+                                    newErrors.general = responseData[key];
+                                } else if (Array.isArray(responseData[key])) {
+                                    newErrors.general = responseData[key].join(' ');
+                                }
+                            }
+                        }
+                    }
+                } else if (response.status === 403) {
+                    // CSRF or permission error
+                    newErrors.general = 'Security error. Please refresh the page and try again.';
+                } else if (response.status === 404) {
+                    // Endpoint not found
+                    newErrors.general = 'Registration service is currently unavailable. Please try again later.';
+                } else {
+                    // Other errors
+                    newErrors.general = 'An unexpected error occurred. Please try again.';
+                }
+                
+                setErrors(newErrors);
+                
+                // Show error alert for general errors
+                if (newErrors.general) {
+                    Swal.fire({
+                        title: 'Registration Error',
+                        text: newErrors.general,
+                        icon: 'error',
+                        confirmButtonColor: '#0d3e6e',
+                        confirmButtonText: 'OK'
+                    });
+                }
+            }
+        } catch (error) {
+            // Network errors or other exceptions
+            let errorMessage = 'An error occurred during registration. Please try again.';
+            
+            if (error.message === 'Failed to fetch') {
+                errorMessage = 'Network error. Please check your internet connection and try again.';
+            } else {
+                errorMessage = error.message || errorMessage;
+            }
+            
+            setErrors({ general: errorMessage });
+            
+            // Show error alert
+            Swal.fire({
+                title: 'Error',
+                text: errorMessage,
+                icon: 'error',
+                confirmButtonColor: '#0d3e6e',
+                confirmButtonText: 'OK'
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [formData, validateForm]);
+
+    const togglePasswordVisibility = useCallback(() => {
+        setShowPassword(prev => !prev);
+    }, []);
+
+    const toggleConfirmPasswordVisibility = useCallback(() => {
+        setShowConfirmPassword(prev => !prev);
+    }, []);
+
+    const getErrorSuggestions = (fieldName) => {
+        const suggestions = {
+            username: 'Try a different username with at least 3 characters using only letters, numbers, and underscores.',
+            email:'',
+            password: 'Use at least 8 characters with a mix of uppercase, lowercase letters, and numbers.',
+            confirmPassword: 'Make sure both password fields match exactly.',
+            profilePhoto: 'Upload a JPEG, PNG, GIF, or WebP image under 5MB in size.',
+            general: 'Please check your information and try again. If the problem persists, contact support.'
+        };
+        
+        return errors[fieldName] ? suggestions[fieldName] : suggestions.general;
+    };
+
+    // Render success page after registration
+    if (isRegistered) {
+        return (
+            <div className="signup-container">
+                <div className="signup-header">
+                    <div className="logo">
+                        <div className="logo-image">
+                            <img 
+                                src={somaselogo}
+                                alt="SOMASE Logo" 
+                                width="100"
+                                height="100"
+                                style={{border: '3px solid white', boxSizing: 'border-box'}}
+                            />
+                        </div>
+                        <div className="logo-text">
+                            <h1 className="logo-tagline">Registration Successful!</h1>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="signup-form" style={{textAlign: 'center', padding: '20px'}}>
+                    <div style={{marginBottom: '20px'}}>
+                        <i className="fas fa-check-circle" style={{fontSize: '48px', color: '#2ecc71'}}></i>
+                    </div>
+                    
+                    <h2 style={{color: 'var(--text-light)', marginBottom: '15px'}}>Check Your Email</h2>
+                    
+                    <p style={{color: 'var(--text-muted)', marginBottom: '25px', lineHeight: '1.5'}}>
+                        We've sent a verification link to your MUBAS email address. 
+                        Please check your inbox and click the link to verify your account.
+                    </p>
+                    
+                    <p style={{color: 'var(--text-muted)', marginBottom: '30px', lineHeight: '1.5'}}>
+                        <strong>Note:</strong> You must verify your email so that you can log in.
+                    </p>
+                    
+                    <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
+                        <a 
+                            href="/login" 
+                            className="signup-btn"
+                            style={{textDecoration: 'none', textAlign: 'center'}}
+                        >
+                            Go to back
+                        </a>
+                        
+                        <button 
+                            onClick={() => setIsRegistered(false)}
+                            style={{
+                                background: 'transparent',
+                                border: '1px solid var(--accent-color)',
+                                color: 'var(--accent-color)',
+                                padding: '10px',
+                                borderRadius: '8px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Register Another Account
+                        </button>
+                    </div>
+                    
+                    <div style={{marginTop: '25px', padding: '15px', background: 'rgba(52, 152, 219, 0.1)', borderRadius: '8px'}}>
+                        <p style={{color: 'var(--text-muted)', fontSize: '14px', margin: 0}}>
+                            <i className="fas fa-info-circle" style={{marginRight: '8px'}}></i>
+                            Didn't receive the email? Check your spam folder or contact support.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Render registration form
+    return (
+        <>
+            <Helmet>
+                <title>Register - MUBAS SOMASE Voting System</title>
+                <meta name="description" content="Create an account to participate in the MUBAS SOMASE voting system. Register to cast your vote securely." />
+                <meta name="keywords" content="MUBAS, SOMASE, voting, election, register, account" />
+                <meta property="og:title" content="Register - MUBAS SOMASE Voting System" />
+                <meta property="og:description" content="Create an account to participate in the MUBAS SOMASE voting system." />
+                <meta property="og:type" content="website" />
+                <link rel="canonical" href="https://voting.somase.mubas.ac.mw/register" />
+            </Helmet>
+            
+            <div className="signup-container">
+                <div className="signup-header">
+                    <div className="logo">
+                        <div className="logo-image">
+                            <img 
+                                src={somaselogo}
+                                alt="SOMASE Logo - Malawi University of Business and Applied Sciences" 
+                                width="100"
+                                height="100"
+                                loading="eager"
+                                style={{border: '3px solid white', boxSizing: 'border-box'}}
+                            />
+                        </div>
+                        <div className="logo-text">
+                            <h1 className="logo-tagline">Create Account</h1>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="signup-form">
+                    {errors.general && (
+                        <div className="error-message general-error">
+                            <div className="error-header">
+                                <i className="fas fa-exclamation-circle"></i>
+                                <strong>Registration Error</strong>
+                            </div>
+                            <p>{errors.general}</p>
+                            <div className="error-suggestion">
+                                <i className="fas fa-lightbulb"></i>
+                                <span>{getErrorSuggestions('general')}</span>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <form onSubmit={handleSubmit} noValidate>
+                        <div className="form-group">
+                            <label htmlFor="username">Username</label>
+                            <div className="input-with-icon">
+                                <i className="fas fa-user" aria-hidden="true"></i>
+                                <input 
+                                    type="text" 
+                                    id="username" 
+                                    name="username"
+                                    value={formData.username}
+                                    onChange={handleChange}
+                                    placeholder="Enter your username eg Mark847" 
+                                    className={errors.username ? 'error' : ''}
+                                    aria-describedby={errors.username ? 'username-error' : undefined}
+                                />
+                            </div>
+                            {errors.username && (
+                                <div id="username-error" className="error-text">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                    <span>{errors.username}</span>
+                                    <div className="error-suggestion">{getErrorSuggestions('username')}</div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="form-group">
+                            <label htmlFor="email">Email Address</label>
+                            <div className="input-with-icon">
+                                <i className="fas fa-envelope" aria-hidden="true"></i>
+                                <input 
+                                    type="email" 
+                                    id="email" 
+                                    name="email"
+                                    value={formData.email}
+                                    onChange={handleChange}
+                                    placeholder="Enter your email address" 
+                                    className={errors.email ? 'error' : ''}
+                                    aria-describedby={errors.email ? 'email-error' : undefined}
+                                />
+                            </div>
+                            {errors.email && (
+                                <div id="email-error" className="error-text">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                    <span>{errors.email}</span>
+                                    <div className="error-suggestion">{getErrorSuggestions('email')}</div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="form-group">
+                            <label htmlFor="password">Password</label>
+                            <div className="input-with-icon">
+                                <i className="fas fa-lock" aria-hidden="true"></i>
+                                <input 
+                                    type={showPassword ? "text" : "password"} 
+                                    id="password" 
+                                    name="password"
+                                    value={formData.password}
+                                    onChange={handleChange}
+                                    placeholder="Create a password" 
+                                    className={errors.password ? 'error' : ''}
+                                    aria-describedby={errors.password ? 'password-error' : undefined}
+                                />
+                                <span 
+                                    className="password-toggle" 
+                                    onClick={togglePasswordVisibility}
+                                    role="button"
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                    tabIndex="0"
+                                    onKeyPress={(e) => e.key === 'Enter' && togglePasswordVisibility()}
+                                >
+                                    <i className={`fas fa-${showPassword ? 'eye-slash' : 'eye'}`} aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            {errors.password && (
+                                <div id="password-error" className="error-text">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                    <span>{errors.password}</span>
+                                    <div className="error-suggestion">{getErrorSuggestions('password')}</div>
+                                </div>
+                            )}
+                            
+                            <Suspense fallback={<div>Loading password strength...</div>}>
+                                <PasswordStrengthMeter password={formData.password} />
+                            </Suspense>
+                        </div>
+                        
+                        <div className="form-group">
+                            <label htmlFor="confirmPassword">Confirm Password</label>
+                            <div className="input-with-icon">
+                                <i className="fas fa-lock" aria-hidden="true"></i>
+                                <input 
+                                    type={showConfirmPassword ? "text" : "password"} 
+                                    id="confirmPassword" 
+                                    name="confirmPassword"
+                                    value={formData.confirmPassword}
+                                    onChange={handleChange}
+                                    placeholder="Confirm your password" 
+                                    className={errors.confirmPassword ? 'error' : ''}
+                                    aria-describedby={errors.confirmPassword ? 'confirm-password-error' : undefined}
+                                />
+                                <span 
+                                    className="password-toggle" 
+                                    onClick={toggleConfirmPasswordVisibility}
+                                    role="button"
+                                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                                    tabIndex="0"
+                                    onKeyPress={(e) => e.key === 'Enter' && toggleConfirmPasswordVisibility()}
+                                >
+                                    <i className={`fas fa-${showConfirmPassword ? 'eye-slash' : 'eye'}`} aria-hidden="true"></i>
+                                </span>
+                            </div>
+                            {errors.confirmPassword && (
+                                <div id="confirm-password-error" className="error-text">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                    <span>{errors.confirmPassword}</span>
+                                    <div className="error-suggestion">{getErrorSuggestions('confirmPassword')}</div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="file-upload">
+                            <Suspense fallback={<div>Loading image upload...</div>}>
+                                <ImageUploadPreview 
+                                    file={formData.profilePhoto}
+                                    onFileChange={handleChange}
+                                    fileName={fileName}
+                                    error={errors.profilePhoto}
+                                />
+                            </Suspense>
+                            {errors.profilePhoto && (
+                                <div className="error-text">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                    <span>{errors.profilePhoto}</span>
+                                    <div className="error-suggestion">{getErrorSuggestions('profilePhoto')}</div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <button 
+                            type="submit" 
+                            className="signup-btn"
+                            disabled={isSubmitting}
+                            aria-busy={isSubmitting}
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <i className="fas fa-spinner fa-spin"></i>
+                                    Creating Account...
+                                </>
+                            ) : (
+                                'Create Account'
+                            )}
+                        </button>
+                    </form>
+                    
+                    <div className="login-link">
+                        Already have an account? <a href="/login">Login</a>
+                    </div>
+                    
+                    <div className="candidate-registration-link" style={{
+                        textAlign: 'center',
+                        marginTop: '15px',
+                        padding: '10px',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}>
+                        <p style={{color: '#aaaaaa', marginBottom: '10px'}}>Want to register as a candidate?</p>
+                        <Link to="/CandidateRegistration" style={{
+                            display: 'inline-block',
+                            padding: '8px 16px',
+                            backgroundColor: 'transparent',
+                            color: '#3498db',
+                            border: '1px solid #3498db',
+                            borderRadius: '6px',
+                            textDecoration: 'none',
+                            fontWeight: '500',
+                            transition: 'all 0.3s ease'
+                        }} onMouseOver={(e) => {
+                            e.target.style.backgroundColor = '#3498db';
+                            e.target.style.color = 'white';
+                        }} onMouseOut={(e) => {
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.color = '#3498db';
+                        }}>
+                            Candidate Registration
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
+
+export default React.memo(Register);

@@ -105,6 +105,8 @@ const Register = () => {
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     }, [formData]);
+
+
       const ensureCSRFToken = useCallback(async () => {
     try {
         // First, try to get the current CSRF token
@@ -138,7 +140,7 @@ const Register = () => {
         setErrors({}); // Clear previous errors
         
         try {
-            
+            const csrftoken = await ensureCSRFToken();
             const data = new FormData();
             data.append('username', formData.username);
             data.append('email', formData.email);
@@ -149,13 +151,13 @@ const Register = () => {
             }
             
             // Get CSRF token
-            const csrftoken = getCookie('csrftoken');
+            //const csrftoken = getCookie('csrftoken');
             
             const response = await fetch(`${BASE_URL}/register/`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
-                    'X-CSRFToken': csrftoken,
+                    'X-CSRFToken': csrftoken || getCookie('csrftoken'),
                 },
                 body: data,
             });

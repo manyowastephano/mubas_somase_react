@@ -107,7 +107,7 @@ const Register = () => {
     }, [formData]);
 
 
-      const ensureCSRFToken = useCallback(async () => {
+ /*     const ensureCSRFToken = useCallback(async () => {
     try {
         // First, try to get the current CSRF token
         let csrftoken = getCookie('csrftoken');
@@ -131,6 +131,145 @@ const Register = () => {
         return null;
     }
 }, []);
+*/
+const ensureCSRFToken = useCallback(async () => {
+    try {
+        // First, try to get the current CSRF token from cookie
+        let csrftoken = getCookie('csrftoken');
+        
+        if (!csrftoken) {
+            // If no token exists, make a GET request to get one
+            const response = await fetch(`${BASE_URL}/get-csrf/`, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                csrftoken = data.csrfToken;
+                console.log('New CSRF token obtained:', csrftoken ? 'Success' : 'Failed');
+                
+                // Also try to get from cookie again
+                const cookieToken = getCookie('csrftoken');
+                if (cookieToken) {
+                    csrftoken = cookieToken;
+                }
+            } else {
+                console.error('Failed to get CSRF token, status:', response.status);
+            }
+        }
+        
+        return csrftoken;
+    } catch (error) {
+        console.error('Error ensuring CSRF token:', error);
+        return null;
+    }
+}, []);
+const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsSubmitting(true);
+    setErrors({}); // Clear previous errors
+    
+    try {
+        const csrftoken = await ensureCSRFToken();
+        
+        if (!csrftoken) {
+            throw new Error('Unable to get security token. Please refresh the page and try again.');
+        }
+        
+        const data = new FormData();
+        data.append('username', formData.username);
+        data.append('email', formData.email);
+        data.append('password', formData.password);
+        data.append('password2', formData.confirmPassword);
+        if (formData.profilePhoto) {
+            data.append('profile_photo', formData.profilePhoto);
+        }
+        
+        const response = await fetch(`${BASE_URL}/register/`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'X-CSRFToken': csrftoken,
+            },
+            body: data,
+        });
+        
+        let responseData;
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json();
+        } else {
+            // If response is not JSON, get text for error message
+            const text = await response.text();
+            throw new Error(`Server returned unexpected format: ${text.substring(0, 100)}`);
+        }
+        
+        if (response.ok) {
+            // Success handling - keep your existing success code
+            setIsRegistered(true);
+            await Swal.fire({
+                title: 'Success!',
+                html: 'Registration successful! Please check your MUBAS email to verify your account. You will be automatically logged in after verification.',
+                icon: 'success',
+                confirmButtonColor: '#0d3e6e',
+                confirmButtonText: 'OK',
+                timer: 7000,
+                timerProgressBar: true
+            });
+        } else {
+            // Error handling - simplified
+            let errorMessage = 'Registration failed. Please try again.';
+            
+            if (responseData.error) {
+                errorMessage = responseData.error;
+            } else if (responseData.details && Array.isArray(responseData.details)) {
+                errorMessage = responseData.details.join(', ');
+            } else if (typeof responseData === 'object') {
+                // Extract first error message from object
+                const firstError = Object.values(responseData)[0];
+                if (Array.isArray(firstError)) {
+                    errorMessage = firstError[0];
+                } else if (typeof firstError === 'string') {
+                    errorMessage = firstError;
+                }
+            }
+            
+            throw new Error(errorMessage);
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        
+        let errorMessage = error.message || 'An error occurred during registration. Please try again.';
+        
+        // Specific error messages for common issues
+        if (error.message.includes('CSRF') || error.message.includes('token')) {
+            errorMessage = 'Security token issue. Please refresh the page and try again.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+            errorMessage = 'Network error. Please check your internet connection and try again.';
+        }
+        
+        setErrors({ general: errorMessage });
+        
+        await Swal.fire({
+            title: 'Registration Error',
+            text: errorMessage,
+            icon: 'error',
+            confirmButtonColor: '#0d3e6e',
+            confirmButtonText: 'OK'
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
+}, [formData, validateForm]);
+/*
     const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
         
@@ -157,7 +296,7 @@ const Register = () => {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
-                    'X-CSRFToken': csrftoken || getCookie('csrftoken'),
+                    'X-CSRFToken': csrftoken,
                 },
                 body: data,
             });
@@ -297,7 +436,7 @@ const Register = () => {
         } finally {
             setIsSubmitting(false);
         }
-    }, [formData, validateForm]);
+    }, [formData, validateForm]);*/
 
     const togglePasswordVisibility = useCallback(() => {
         setShowPassword(prev => !prev);

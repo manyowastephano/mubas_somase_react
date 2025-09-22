@@ -50,11 +50,7 @@ const Login = () => {
     }, [formData]);
 
     const handleSubmit = useCallback(async (e) => {
-        console.log('Making request to:', `${API_BASE_URL}/login/`);
-console.log('Environment variables:', {
-    REACT_APP_BASE_URL: process.env.REACT_APP_BASE_URL,
-    REACT_APP_API_BASE_URL: process.env.REACT_APP_API_BASE_URL
-});
+       
         e.preventDefault();
         
         if (!validateForm()) return;

@@ -105,7 +105,30 @@ const Register = () => {
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     }, [formData]);
-
+      const ensureCSRFToken = useCallback(async () => {
+    try {
+        // First, try to get the current CSRF token
+        let csrftoken = getCookie('csrftoken');
+        
+        if (!csrftoken) {
+            // If no token exists, make a GET request to get one
+            const response = await fetch(`${BASE_URL}/get-csrf/`, {
+                method: 'GET',
+                credentials: 'include',
+            });
+            
+            if (response.ok) {
+                csrftoken = getCookie('csrftoken');
+                console.log('New CSRF token obtained:', csrftoken);
+            }
+        }
+        
+        return csrftoken;
+    } catch (error) {
+        console.error('Error ensuring CSRF token:', error);
+        return null;
+    }
+}, []);
     const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
         
@@ -115,6 +138,7 @@ const Register = () => {
         setErrors({}); // Clear previous errors
         
         try {
+            const csrftoken = await ensureCSRFToken();
             const data = new FormData();
             data.append('username', formData.username);
             data.append('email', formData.email);
@@ -125,7 +149,7 @@ const Register = () => {
             }
             
             // Get CSRF token
-            const csrftoken = getCookie('csrftoken');
+            //const csrftoken = getCookie('csrftoken');
             
             const response = await fetch(`${BASE_URL}/register/`, {
                 method: 'POST',

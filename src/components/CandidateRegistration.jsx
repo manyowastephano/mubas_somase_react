@@ -127,46 +127,89 @@ const CandidateRegistration = () => {
         
         return Object.keys(newErrors).length === 0;
     }, [formData]);
-
-    const handleSubmit = useCallback(async (e) => {
-        e.preventDefault();
+const ensureCSRFToken = useCallback(async () => {
+    try {
+        // First, try to get the current CSRF token from cookie
+        let csrftoken = getCookie('csrftoken');
         
-        if (!validateForm()) return;
-        
-        setIsSubmitting(true);
-        
-        try {
-            const submissionData = new FormData();
-            submissionData.append('email', formData.email);
-            submissionData.append('full_name', formData.fullName);
-            submissionData.append('position', formData.position);
-            submissionData.append('phone', formData.phone);
-            submissionData.append('slogan', formData.slogan);
-            submissionData.append('manifesto', formData.manifesto);
-            
-            if (formData.profilePhoto) {
-                submissionData.append('profile_photo', formData.profilePhoto);
-            }
-            
-            const csrftoken = getCookie('csrftoken');
-            
-            const response = await fetch(`${BASE_URL}/candidate/register/`, {
-                method: 'POST',
+        if (!csrftoken) {
+            // If no token exists, make a GET request to get one
+            const response = await fetch(`${BASE_URL}/get-csrf/`, {
+                method: 'GET',
                 credentials: 'include',
                 headers: {
-                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json',
                 },
-                body: submissionData,
             });
             
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            if (response.ok) {
+                const data = await response.json();
+                csrftoken = data.csrfToken;
+                console.log('New CSRF token obtained for candidate registration:', csrftoken ? 'Success' : 'Failed');
+                
+                // Also try to get from cookie again
+                const cookieToken = getCookie('csrftoken');
+                if (cookieToken) {
+                    csrftoken = cookieToken;
+                }
+            } else {
+                console.error('Failed to get CSRF token, status:', response.status);
             }
-            
-            const responseData = await response.json();
-            
-            // Show success alert with SweetAlert2
+        }
+        
+        return csrftoken;
+    } catch (error) {
+        console.error('Error ensuring CSRF token:', error);
+        return null;
+    }
+}, []);
+
+const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+        const csrftoken = await ensureCSRFToken();
+        
+        if (!csrftoken) {
+            throw new Error('Unable to get security token. Please refresh the page and try again.');
+        }
+        
+        const submissionData = new FormData();
+        submissionData.append('email', formData.email);
+        submissionData.append('full_name', formData.fullName);
+        submissionData.append('position', formData.position);
+        submissionData.append('phone', formData.phone);
+        submissionData.append('slogan', formData.slogan);
+        submissionData.append('manifesto', formData.manifesto);
+        
+        if (formData.profilePhoto) {
+            submissionData.append('profile_photo', formData.profilePhoto);
+        }
+        
+        const response = await fetch(`${BASE_URL}/candidate/register/`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'X-CSRFToken': csrftoken,
+            },
+            body: submissionData,
+        });
+        
+        let responseData;
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json();
+        } else {
+            const text = await response.text();
+            throw new Error(`Server returned unexpected format: ${text.substring(0, 100)}`);
+        }
+        
+        if (response.ok) {
             Swal.fire({
                 icon: 'success',
                 title: 'Application Submitted!',
@@ -186,84 +229,71 @@ const CandidateRegistration = () => {
                 profilePhoto: null
             });
             setFileName('No file chosen');
-        } catch (error) {
-            console.error('Registration error:', error);
+        } else {
+            let errorMessage = 'Registration failed. Please try again.';
             
-            if (error.message.includes('already applied')) {
-                setHasApplied(true);
-                
-                // Show warning with SweetAlert2
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Already Applied',
-                    text: 'You have already applied for a position.',
-                    confirmButtonColor: '#0d3e6e',
-                });
-                
-                // Try to get the existing application details
-                try {
-                    const csrftoken = getCookie('csrftoken');
-                    const checkResponse = await fetch(`${BASE_URL}/api/candidates/check-application/?email=${encodeURIComponent(formData.email)}`, {
-                        method: 'GET',
-                        headers: {
-                            'X-CSRFToken': csrftoken,
-                        },
-                    });
-                    
-                    if (checkResponse.ok) {
-                        const applicationData = await checkResponse.json();
-                        setExistingApplication(applicationData);
-                    }
-                } catch (err) {
-                    console.error('Error fetching application details:', err);
+            if (responseData.error) {
+                errorMessage = responseData.error;
+            } else if (responseData.details && Array.isArray(responseData.details)) {
+                errorMessage = responseData.details.join(', ');
+            } else if (typeof responseData === 'object') {
+                const firstError = Object.values(responseData)[0];
+                if (Array.isArray(firstError)) {
+                    errorMessage = firstError[0];
+                } else if (typeof firstError === 'string') {
+                    errorMessage = firstError;
                 }
-            } else if (error.message.includes('not registered')) {
-                // Show error for email not registered
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Email Not Registered',
-                    text: 'This email is not registered in our system. Please register first before applying.',
-                    confirmButtonColor: '#0d3e6e',
-                });
-            } else if (error.message.includes('HTTP error')) {
-                let errorMessage = 'An error occurred during registration. Please try again.';
-                
-                if (error.message.includes('401')) {
-                    errorMessage = 'Please log in to submit a candidate application.';
-                } else if (error.message.includes('403')) {
-                    errorMessage = 'You do not have permission to submit a candidate application.';
-                } else if (error.message.includes('400')) {
-                    errorMessage = 'Invalid request. Please check your input.';
-                }
-                
-                // Show error with SweetAlert2
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: errorMessage,
-                    confirmButtonColor: '#0d3e6e',
-                });
-            } else if (error.message === 'Failed to fetch') {
-                // Show network error with SweetAlert2
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Network Error',
-                    text: 'Network error. Please check your connection and try again.',
-                    confirmButtonColor: '#0d3e6e',
-                });
-            } else {
-                // Show generic error with SweetAlert2
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: error.message || 'An error occurred during registration. Please try again.',
-                    confirmButtonColor: '#0d3e6e',
-                });
             }
-        } finally {
-            setIsSubmitting(false);
+            
+            throw new Error(errorMessage);
         }
-    }, [formData, validateForm]);
+    } catch (error) {
+        console.error('Registration error:', error);
+        
+        let errorMessage = error.message || 'An error occurred during registration. Please try again.';
+        
+        if (error.message.includes('CSRF') || error.message.includes('token')) {
+            errorMessage = 'Security token issue. Please refresh the page and try again.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+            errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (error.message.includes('already applied')) {
+            setHasApplied(true);
+            errorMessage = 'You have already applied for a position.';
+        } else if (error.message.includes('not registered')) {
+            errorMessage = 'This email is not registered in our system. Please register first before applying.';
+        }
+        
+        // Show error with SweetAlert2
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: errorMessage,
+            confirmButtonColor: '#0d3e6e',
+        });
+        
+        // Try to get existing application if it's an "already applied" error
+        if (error.message.includes('already applied')) {
+            try {
+                const csrftoken = await ensureCSRFToken();
+                const checkResponse = await fetch(`${BASE_URL}/api/candidates/check-application/?email=${encodeURIComponent(formData.email)}`, {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                    },
+                });
+                
+                if (checkResponse.ok) {
+                    const applicationData = await checkResponse.json();
+                    setExistingApplication(applicationData);
+                }
+            } catch (err) {
+                console.error('Error fetching application details:', err);
+            }
+        }
+    } finally {
+        setIsSubmitting(false);
+    }
+}, [formData, validateForm]);
 
     // If user has already applied, show message instead of form
     if (hasApplied) {

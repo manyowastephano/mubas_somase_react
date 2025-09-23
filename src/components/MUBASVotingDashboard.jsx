@@ -382,7 +382,7 @@ const MUBASVotingDashboard = () => {
       
       // Get CSRF token
       // const csrfToken = getCSRFToken();
-      
+      const csrfToken = await ensureCSRFToken(BASE_URL);
       // Call bulk vote endpoint
       const response = await fetch(`${BASE_URL}/api/bulk-vote/`, {
         method: 'POST',

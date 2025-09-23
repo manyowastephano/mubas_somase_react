@@ -127,6 +127,7 @@ const CandidateRegistration = () => {
         
         return Object.keys(newErrors).length === 0;
     }, [formData]);
+    
 const ensureCSRFToken = useCallback(async () => {
     try {
         // First, try to get the current CSRF token from cookie

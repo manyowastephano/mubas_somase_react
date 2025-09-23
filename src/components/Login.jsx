@@ -49,6 +49,43 @@ const Login = () => {
         return Object.keys(newErrors).length === 0;
     }, [formData]);
 
+     
+    const ensureCSRFToken = useCallback(async () => {
+        try {
+            // First, try to get the current CSRF token from cookie
+            let csrftoken = getCookie('csrftoken');
+            
+            if (!csrftoken) {
+                // If no token exists, make a GET request to get one
+                const response = await fetch(`${BASE_URL}/get-csrf/`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    csrftoken = data.csrfToken;
+                    console.log('New CSRF token obtained for candidate registration:', csrftoken ? 'Success' : 'Failed');
+                    
+                    // Also try to get from cookie again
+                    const cookieToken = getCookie('csrftoken');
+                    if (cookieToken) {
+                        csrftoken = cookieToken;
+                    }
+                } else {
+                    console.error('Failed to get CSRF token, status:', response.status);
+                }
+            }
+            
+            return csrftoken;
+        } catch (error) {
+            console.error('Error ensuring CSRF token:', error);
+            return null;
+        }
+    }, []);
     const handleSubmit = useCallback(async (e) => {
        
         e.preventDefault();
@@ -59,8 +96,8 @@ const Login = () => {
         setErrors({});
         
         try {
-            const csrftoken = getCookie('csrftoken');
-            
+          //  const csrftoken = getCookie('csrftoken');
+            const csrftoken = await ensureCSRFToken();
             const response = await fetch(`${BASE_URL}/login/`, {
                 method: 'POST',
                 credentials: 'include',

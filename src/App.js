@@ -10,6 +10,7 @@ const ElectionsDashboard = lazy(() => import('./components/ElectionsDashboard'))
 const CandidateRegistration = lazy(() => import('./components/CandidateRegistration'));
 const MUBASVotingDashboard = lazy(() => import('./components/MUBASVotingDashboard'));
 const EditCandidateApplication = lazy(() => import('./components/EditCandidateApplication'));
+const ActivationHandler = lazy(() => import('./components/ActivationHandler'));
 
 function App() {
     return (
@@ -24,6 +25,7 @@ function App() {
                         <Route path="/login" element={<Login />} />
                         <Route path="/register" element={<Register />} />
                         <Route path="/VotingDashboard" element={<MUBASVotingDashboard />} />
+                        <Route path="/activate/:uidb64/:token" element={<ActivationHandler />} />
                         <Route path="/ElectionDashboard" element={<ElectionsDashboard />} />
                         <Route path="/CandidateRegistration" element={<CandidateRegistration />} />
                         <Route path="/candidate-application/edit/:id" element={<EditCandidateApplication />} />

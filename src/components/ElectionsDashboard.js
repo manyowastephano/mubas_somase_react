@@ -3,6 +3,7 @@ import './ElectionDashboard.css';
 import Swal from 'sweetalert2';
 import somaselogo from '../images/somase-logo.jpeg';
 import { BASE_URL } from '../config';
+import { ensureCSRFToken, getCookie } from '../utils/csrf';
 
 const ElectionDashboard = () => {
   const [activePage, setActivePage] = useState('dashboard');
@@ -152,7 +153,8 @@ const deleteAllCandidates = async () => {
     });
 
     if (result.isConfirmed) {
-      const csrfToken = getCSRFToken();
+     // const csrfToken = getCSRFToken();
+     const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/candidates/delete-all/`, {
         method: 'DELETE',
         headers: {
@@ -330,7 +332,8 @@ const fetchUnreadAuditLogsCount = async () => {
 // Mark all audit logs as read
 const markAuditLogsAsRead = async () => {
   try {
-    const csrfToken = getCSRFToken();
+    //const csrfToken = getCSRFToken();
+    const csrfToken = await ensureCSRFToken(BASE_URL);
     const response = await fetch(`${BASE_URL}/api/audit-logs/mark-read/`, {
       method: 'POST',
       headers: {
@@ -363,7 +366,8 @@ const clearAuditLogs = async () => {
     });
 
     if (result.isConfirmed) {
-      const csrfToken = getCSRFToken();
+      //const csrfToken = getCSRFToken();
+      const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/audit-logs/clear/`, {
         method: 'POST',
         headers: {
@@ -422,7 +426,8 @@ useEffect(() => {
 
 const handleLogout = async () => {
   try {
-    const csrfToken = getCSRFToken();
+    //const csrfToken = getCSRFToken();
+    const csrfToken = await ensureCSRFToken(BASE_URL);
     const response = await fetch(`${BASE_URL}/api/auth/logout/`, {
       method: 'POST',
       headers: {
@@ -553,7 +558,8 @@ const resetAllVotes = async () => {
     });
 
     if (result.isConfirmed) {
-      const csrfToken = getCSRFToken();
+      //const csrfToken = getCSRFToken();
+      const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/reset-votes/`, {
         method: 'POST',
         headers: {
@@ -683,8 +689,8 @@ const formatDateForInput = (dateString) => {
   // Update candidate status
   const updateCandidateStatus = async (id, newStatus) => {
     try {
-      const csrfToken = getCSRFToken();
-      
+      //const csrfToken = getCSRFToken();
+      const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/candidates/${id}/status/`, {
         method: 'PATCH',
         headers: {
@@ -802,8 +808,8 @@ const formatRelativeTime = (dateString) => {
   // Save election settings
 const saveElectionSettings = async () => {
   try {
-    const csrfToken = getCSRFToken();
-    
+   // const csrfToken = getCSRFToken();
+    const csrfToken = await ensureCSRFToken(BASE_URL);
     const formatDateForBackend = (dateString) => {
   if (!dateString) return null;
   
@@ -896,8 +902,8 @@ const startElection = async (isAutomatic = false) => {
         return;
       }
     }
-    
-    const csrfToken = getCSRFToken();
+    const csrfToken = await ensureCSRFToken(BASE_URL);
+    //const csrfToken = getCSRFToken();
     const response = await fetch(`${BASE_URL}/api/start-election/`, {
       method: 'POST',
       headers: {
@@ -981,7 +987,7 @@ const startElection = async (isAutomatic = false) => {
     }
   }
 };
-// Update the cancelElection function
+
 const cancelElection = async () => {
   try {
     const result = await Swal.fire({
@@ -996,7 +1002,8 @@ const cancelElection = async () => {
     });
     
     if (result.isConfirmed) {
-      const csrfToken = getCSRFToken();
+      //const csrfToken = getCSRFToken();
+      const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/cancel-election/`, {
         method: 'POST',
         headers: {
@@ -1102,7 +1109,8 @@ useEffect(() => {
       
       if (!electionSettings.additional_emails.includes(cleanEmail)) {
         try {
-          const csrfToken = getCSRFToken();
+         // const csrfToken = getCSRFToken();
+         const csrfToken = await ensureCSRFToken(BASE_URL);
           const response = await fetch(`${BASE_URL}/api/election-settings/`, {
             method: 'PUT',
             headers: {
@@ -1162,7 +1170,8 @@ useEffect(() => {
   // Remove email from additional emails
   const removeEmail = async (emailToRemove) => {
     try {
-      const csrfToken = getCSRFToken();
+      const csrfToken = await ensureCSRFToken(BASE_URL);
+     // const csrfToken = getCSRFToken();
       const response = await fetch(`${BASE_URL}/api/election-settings/`, {
         method: 'PUT',
         headers: {
@@ -1210,15 +1219,15 @@ useEffect(() => {
     }
   };
 
-  // Helper function to get CSRF token
-  const getCSRFToken = () => {
-    const cookieValue = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('csrftoken='))
-      ?.split('=')[1];
+  // // Helper function to get CSRF token
+  // const getCSRFToken = () => {
+  //   const cookieValue = document.cookie
+  //     .split('; ')
+  //     .find(row => row.startsWith('csrftoken='))
+  //     ?.split('=')[1];
     
-    return cookieValue || '';
-  };
+  //   return cookieValue || '';
+  // };
 
   // Handle scroll events for scroll-to-top button
   useEffect(() => {
@@ -1426,7 +1435,8 @@ useEffect(() => {
   // Add moderator
   const addModerator = async (email) => {
     try {
-      const csrfToken = getCSRFToken();
+      //const csrfToken = getCSRFToken();
+      const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/moderators/`, {
         method: 'POST',
         headers: {
@@ -1474,7 +1484,8 @@ useEffect(() => {
   // Remove moderator
   const removeModerator = async (id, email) => {
     try {
-      const csrfToken = getCSRFToken();
+     // const csrfToken = getCSRFToken();
+     const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/moderators/`, {
         method: 'POST',
         headers: {
@@ -1528,7 +1539,8 @@ useEffect(() => {
     }
 
     try {
-      const csrfToken = getCSRFToken();
+     // const csrfToken = getCSRFToken();
+     const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/moderators/`, {
         method: 'POST',
         headers: {
@@ -1574,7 +1586,8 @@ useEffect(() => {
   // Transfer presidency
   const transferPresidency = async (email) => {
     try {
-      const csrfToken = getCSRFToken();
+     // const csrfToken = getCSRFToken();
+     const csrfToken = await ensureCSRFToken(BASE_URL);
       const response = await fetch(`${BASE_URL}/api/moderators/`, {
         method: 'POST',
         headers: {

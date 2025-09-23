@@ -3,6 +3,7 @@ import Swal from 'sweetalert2';
 import './votingDB.css';
 import somaselogo from '../images/somase-logo.jpeg';
 import { BASE_URL } from '../config';
+import { ensureCSRFToken, getCookie } from '../utils/csrf';
 
 const MUBASVotingDashboard = () => {
   // State management
@@ -98,8 +99,8 @@ const MUBASVotingDashboard = () => {
     if (result.isConfirmed) {
       try {
         setIsDeleting(true);
-        const csrfToken = getCSRFToken();
-        
+       // const csrfToken = getCSRFToken();
+         const csrfToken = await ensureCSRFToken(BASE_URL);
         const response = await fetch(`${BASE_URL}/api/candidate-application/${myApplication.id}/`, {
           method: 'DELETE',
           headers: {
@@ -380,8 +381,8 @@ const MUBASVotingDashboard = () => {
       }));
       
       // Get CSRF token
-      const csrfToken = getCSRFToken();
-      
+      // const csrfToken = getCSRFToken();
+       const csrfToken = await ensureCSRFToken(BASE_URL);
       // Call bulk vote endpoint
       const response = await fetch(`${BASE_URL}/api/bulk-vote/`, {
         method: 'POST',
@@ -510,15 +511,15 @@ const MUBASVotingDashboard = () => {
     }
   };
 
-  // Helper function to get CSRF token
-  const getCSRFToken = () => {
-    const cookieValue = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('csrftoken='))
-      ?.split('=')[1];
+  // // Helper function to get CSRF token
+  // const getCSRFToken = () => {
+  //   const cookieValue = document.cookie
+  //     .split('; ')
+  //     .find(row => row.startsWith('csrftoken='))
+  //     ?.split('=')[1];
     
-    return cookieValue || '';
-  };
+  //   return cookieValue || '';
+  // };
 
   // Handle login redirect
   const handleLoginRedirect = () => {

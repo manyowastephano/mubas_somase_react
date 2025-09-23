@@ -168,6 +168,7 @@ const ensureCSRFToken = useCallback(async () => {
         return null;
     }
 }, []);
+
 const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     
@@ -699,13 +700,13 @@ const handleSubmit = useCallback(async (e) => {
                             )}
                         </div>
                         
-                        <div className="file-upload">
+<div className="file-upload">
                             <Suspense fallback={<div>Loading image upload...</div>}>
                                 <ImageUploadPreview 
                                     file={formData.profilePhoto}
                                     onFileChange={handleChange}
                                     fileName={fileName}
-                                    error={errors.profilePhoto}
+                                                            error={errors.profilePhoto}
                                 />
                             </Suspense>
                             {errors.profilePhoto && (

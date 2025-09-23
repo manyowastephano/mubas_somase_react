@@ -605,7 +605,7 @@ const handleSubmit = useCallback(async (e) => {
                         </div>
                         
                         <div className="form-group">
-                            <label htmlFor="email">Email Address</label>
+                            <label htmlFor="email">School Email Address</label>
                             <div className="input-with-icon">
                                 <i className="fas fa-envelope" aria-hidden="true"></i>
                                 <input 

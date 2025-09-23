@@ -79,6 +79,82 @@ const MUBASVotingDashboard = () => {
       console.error('Error fetching application:', err);
     }
   };
+const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+// Add this function to handle account deletion
+const handleDeleteAccount = async () => {
+  // Show confirmation dialog
+  const result = await Swal.fire({
+    title: 'Are you absolutely sure?',
+    html: `
+      <div style="text-align: left;">
+        <p>This action <strong>cannot be undone</strong>. This will permanently:</p>
+        <ul>
+          <li>Delete your account</li>
+          <li>Remove all your data</li>
+          <li>Delete any candidate applications</li>
+          <li>Remove your votes from the system</li>
+        </ul>
+        <p>To confirm, type <strong>DELETE MY ACCOUNT</strong> below:</p>
+        <input type="text" id="confirmDelete" class="swal2-input" placeholder="DELETE MY ACCOUNT">
+      </div>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Yes, delete my account',
+    cancelButtonText: 'Cancel',
+    focusConfirm: false,
+    preConfirm: () => {
+      const confirmInput = document.getElementById('confirmDelete');
+      if (confirmInput.value !== 'DELETE MY ACCOUNT') {
+        Swal.showValidationMessage('Please type DELETE MY ACCOUNT to confirm');
+      }
+      return confirmInput.value;
+    }
+  });
+
+  // If user confirms deletion
+  if (result.isConfirmed) {
+    try {
+      setIsDeletingAccount(true);
+      const csrfToken = await ensureCSRFToken(BASE_URL);
+      
+      const response = await fetch(`${BASE_URL}/api/auth/user/delete/`, {
+        method: 'DELETE',
+        headers: {
+          'X-CSRFToken': csrfToken,
+        },
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        Swal.fire({
+          title: 'Account Deleted',
+          text: 'Your account has been successfully deleted.',
+          icon: 'success',
+          confirmButtonText: 'OK'
+        }).then(() => {
+          // Redirect to login page after deletion
+          window.location.href = '/login';
+        });
+      } else {
+        throw new Error('Failed to delete account');
+      }
+    } catch (err) {
+      console.error('Error deleting account:', err);
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to delete account. Please try again.',
+        icon: 'error',
+        confirmButtonText: 'OK'
+      });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }
+};
 
   const handleDeleteApplication = async () => {
     if (!myApplication) return;
@@ -502,6 +578,21 @@ const MUBASVotingDashboard = () => {
       localStorage.setItem('somasVotes', JSON.stringify(newVotedCandidates));
     }
   };
+useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (!event.target.closest('.user-info')) {
+      setShowDropdown(false);
+    }
+  };
+
+  if (showDropdown) {
+    document.addEventListener('click', handleClickOutside);
+  }
+
+  return () => {
+    document.removeEventListener('click', handleClickOutside);
+  };
+}, [showDropdown]);
 
   const renderUserAvatar = (user) => {
     if (user.profile_photo) {
@@ -889,7 +980,28 @@ const MUBASVotingDashboard = () => {
           )}
         </div>
       )}
-      
+      <div className="user-info">
+  <span>Welcome, {user.username}</span>
+  <div className="user-avatar" onClick={() => setShowDropdown(!showDropdown)}>
+    {renderUserAvatar(user)}
+  </div>
+  {showDropdown && (
+    <div className="user-dropdown">
+      <button 
+        className="dropdown-item delete-account"
+        onClick={handleDeleteAccount}
+        disabled={isDeletingAccount}
+      >
+        <i className="fas fa-trash-alt"></i>
+        {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
+      </button>
+      <button className="dropdown-item" onClick={handleLoginRedirect}>
+        <i className="fas fa-sign-out-alt"></i>
+        Logout
+      </button>
+    </div>
+  )}
+</div>
       {/* Mobile Bottom Navigation */}
       {user && isElectionActive && isUserEligible && (
         <div className="mobile-bottom-nav">

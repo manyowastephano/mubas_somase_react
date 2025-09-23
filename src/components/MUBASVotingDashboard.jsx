@@ -705,17 +705,7 @@ const handleDeleteAccount = async () => {
             <div className="logo-text">SOMASE Voting</div>
           </div>
           <div className="user-info">
-            <button 
-                    onClick={handleDeleteAccount}
-                    disabled={isDeletingAccount}
-                    style={{ 
-                        marginLeft: '10px', 
-                        padding: '5px 10px',
-                        cursor: isDeletingAccount ? 'not-allowed' : 'pointer'
-                    }}
-                >
-                    {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
-                </button>
+            
             <span>Welcome, {user.username}</span>
             <div className="user-avatar">
               {renderUserAvatar(user)}
@@ -751,6 +741,7 @@ const handleDeleteAccount = async () => {
           </div>
           <div className="user-info">
             <span>Welcome, {user.username}</span>
+            
             <div className="user-avatar">
               {renderUserAvatar(user)}
             </div>
@@ -851,6 +842,17 @@ const handleDeleteAccount = async () => {
         <h1 className="dashboard-title">2025 SOMASE Elections</h1>
         <p className="dashboard-subtitle">
           Cast your vote for the candidates who will lead our organization forward. Your vote matters!
+          <button 
+                    onClick={handleDeleteAccount}
+                    disabled={isDeletingAccount}
+                    style={{ 
+                        marginLeft: '10px', 
+                        padding: '5px 10px',
+                        cursor: isDeletingAccount ? 'not-allowed' : 'pointer'
+                    }}
+                >
+                    {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
+                </button>
         </p>
       </div>
       

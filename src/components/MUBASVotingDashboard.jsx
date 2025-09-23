@@ -54,7 +54,60 @@ const MUBASVotingDashboard = () => {
     'organising-secretary', 'publicity-secretary', 'entertainment-director',
     'sports-director', 'society-member'
   ];
-
+// Handle account deletion
+const handleDeleteAccount = async () => {
+    if (!user) return;
+    
+    const result = await Swal.fire({
+        title: 'Delete Your Account?',
+        text: "This action cannot be undone. All your data will be permanently removed.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete my account',
+        cancelButtonText: 'Cancel'
+    });
+    
+    if (result.isConfirmed) {
+        try {
+            setIsDeletingAccount(true);
+            const csrfToken = await ensureCSRFToken(BASE_URL);
+            
+            const response = await fetch(`${BASE_URL}/api/delete-account/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                },
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                Swal.fire({
+                    title: 'Account Deleted',
+                    text: 'Your account has been permanently deleted.',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    // Redirect to login page
+                    window.location.href = '/login';
+                });
+            } else {
+                throw new Error('Failed to delete account');
+            }
+        } catch (err) {
+            console.error('Error deleting account:', err);
+            Swal.fire({
+                title: 'Error',
+                text: 'Failed to delete account. Please try again.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+        } finally {
+            setIsDeletingAccount(false);
+        }
+    }
+};
   // Add this useEffect to fetch user's application when user is available
   useEffect(() => {
     if (user) {
@@ -651,6 +704,17 @@ const MUBASVotingDashboard = () => {
             <div className="logo-text">SOMASE Voting</div>
           </div>
           <div className="user-info">
+            <button 
+                    onClick={handleDeleteAccount}
+                    disabled={isDeletingAccount}
+                    style={{ 
+                        marginLeft: '10px', 
+                        padding: '5px 10px',
+                        cursor: isDeletingAccount ? 'not-allowed' : 'pointer'
+                    }}
+                >
+                    {isDeletingAccount ? 'Deleting...' : 'Delete Account'}
+                </button>
             <span>Welcome, {user.username}</span>
             <div className="user-avatar">
               {renderUserAvatar(user)}

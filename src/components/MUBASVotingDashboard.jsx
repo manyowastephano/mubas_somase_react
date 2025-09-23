@@ -7,6 +7,7 @@ import { ensureCSRFToken, getCookie } from '../utils/csrf';
 
 const MUBASVotingDashboard = () => {
   // State management
+  const [showDropdown, setShowDropdown] = useState(false);
   const [activePosition, setActivePosition] = useState('all');
   const [votedCandidates, setVotedCandidates] = useState({});
   const [user, setUser] = useState(null);

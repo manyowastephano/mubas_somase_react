@@ -1,5 +1,5 @@
 // src/components/PasswordStrengthMeter.js
-import React, { useMemo } from 'react';
+/*import React, { useMemo } from 'react';
 
 const PasswordStrengthMeter = ({ password }) => {
     const strength = useMemo(() => {
@@ -35,4 +35,4 @@ const PasswordStrengthMeter = ({ password }) => {
     );
 };
 
-export default React.memo(PasswordStrengthMeter);
+export default React.memo(PasswordStrengthMeter);*/

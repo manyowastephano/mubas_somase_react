@@ -68,9 +68,7 @@ const Register = () => {
             newErrors.username = 'Username is required';
         } else if (formData.username.length < 3) {
             newErrors.username = 'Username must be at least 3 characters';
-        } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-            newErrors.username = 'Username can only contain letters, numbers, and underscores';
-        }
+        } 
         
         if (!formData.email) {
             newErrors.email = 'Email is required';
@@ -80,11 +78,9 @@ const Register = () => {
         
         if (!formData.password) {
             newErrors.password = 'Password is required';
-        } else if (formData.password.length < 8) {
-            newErrors.password = 'Password must be at least 8 characters';
-        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
-            newErrors.password = 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
-        }
+        } else if (formData.password.length < 6) {
+            newErrors.password = 'Password must be at least 6 characters';
+        } 
         
         if (!formData.confirmPassword) {
             newErrors.confirmPassword = 'Please confirm your password';
@@ -92,46 +88,11 @@ const Register = () => {
             newErrors.confirmPassword = 'Passwords do not match';
         }
         
-        // Validate profile photo if provided
-        if (formData.profilePhoto) {
-            const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            if (!validImageTypes.includes(formData.profilePhoto.type)) {
-                newErrors.profilePhoto = 'Please upload a valid image (JPEG, PNG, GIF, or WebP)';
-            } else if (formData.profilePhoto.size > 5 * 1024 * 1024) { // 5MB limit
-                newErrors.profilePhoto = 'Image size must be less than 5MB';
-            }
-        }
-        
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     }, [formData]);
 
 
- /*     const ensureCSRFToken = useCallback(async () => {
-    try {
-        // First, try to get the current CSRF token
-        let csrftoken = getCookie('csrftoken');
-        
-        if (!csrftoken) {
-            // If no token exists, make a GET request to get one
-            const response = await fetch(`${BASE_URL}/get-csrf/`, {
-                method: 'GET',
-                credentials: 'include',
-            });
-            
-            if (response.ok) {
-                csrftoken = getCookie('csrftoken');
-                console.log('New CSRF token obtained:', csrftoken);
-            }
-        }
-        
-        return csrftoken;
-    } catch (error) {
-        console.error('Error ensuring CSRF token:', error);
-        return null;
-    }
-}, []);
-*/
 const ensureCSRFToken = useCallback(async () => {
     try {
         // First, try to get the current CSRF token from cookie
@@ -270,174 +231,7 @@ const handleSubmit = useCallback(async (e) => {
         setIsSubmitting(false);
     }
 }, [formData, validateForm]);
-/*
-    const handleSubmit = useCallback(async (e) => {
-        e.preventDefault();
-        
-        if (!validateForm()) return;
-        
-        setIsSubmitting(true);
-        setErrors({}); // Clear previous errors
-        
-        try {
-            const csrftoken = await ensureCSRFToken();
-            const data = new FormData();
-            data.append('username', formData.username);
-            data.append('email', formData.email);
-            data.append('password', formData.password);
-            data.append('password2', formData.confirmPassword);
-            if (formData.profilePhoto) {
-                data.append('profile_photo', formData.profilePhoto);
-            }
-            
-            // Get CSRF token
-            //const csrftoken = getCookie('csrftoken');
-            
-            const response = await fetch(`${BASE_URL}/register/`, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'X-CSRFToken': csrftoken,
-                },
-                body: data,
-            });
-            
-            let responseData;
-            try {
-                responseData = await response.json();
-            } catch (jsonError) {
-                throw new Error('Server returned an invalid response. Please try again later.');
-            }
-            
-            if (response.ok) {
-                // Set registered state to true
-                setIsRegistered(true);
-                
-                // Use SweetAlert2 for success message
-                await Swal.fire({
-                    title: 'Success!',
-                    html: 'Registration successful! Please check your MUBAS email to verify your account. You will be automatically logged in after verification.',
-                    icon: 'success',
-                    confirmButtonColor: '#0d3e6e',
-                    confirmButtonText: 'OK',
-                    timer: 7000,
-                    timerProgressBar: true
-                });
-            } else {
-                // Handle different types of server errors
-                let newErrors = {};
-                
-                if (response.status >= 500) {
-                    // Server error
-                    newErrors.general = 'Server error. Please try again later.';
-                } else if (response.status === 400) {
-                    // Check if we have the new error format with a simple error message
-                    if (responseData.error) {
-                        newErrors.general = responseData.error;
-                        
-                        // Also check if we have details for specific field errors
-                        if (responseData.details && Array.isArray(responseData.details)) {
-                            responseData.details.forEach(detail => {
-                                if (detail.includes('username')) {
-                                    newErrors.username = detail.replace('username: ', '');
-                                } else if (detail.includes('email')) {
-                                    newErrors.email = detail.replace('email: ', '');
-                                } else if (detail.includes('password')) {
-                                    newErrors.password = detail.replace('password: ', '');
-                                }
-                            });
-                        }
-                    } else {
-                        // Fallback to old error handling for compatibility
-                        for (let key in responseData) {
-                            if (key === 'username') {
-                                if (typeof responseData[key] === 'string') {
-                                    newErrors.username = responseData[key];
-                                } else if (Array.isArray(responseData[key])) {
-                                    newErrors.username = responseData[key].join(' ');
-                                }
-                            } else if (key === 'email') {
-                                if (typeof responseData[key] === 'string') {
-                                    newErrors.email = responseData[key];
-                                } else if (Array.isArray(responseData[key])) {
-                                    newErrors.email = responseData[key].join(' ');
-                                }
-                            } else if (key === 'password') {
-                                if (typeof responseData[key] === 'string') {
-                                    newErrors.password = responseData[key];
-                                } else if (Array.isArray(responseData[key])) {
-                                    newErrors.password = responseData[key].join(' ');
-                                }
-                            } else if (key === 'profile_photo') {
-                                if (typeof responseData[key] === 'string') {
-                                    newErrors.profilePhoto = responseData[key];
-                                } else if (Array.isArray(responseData[key])) {
-                                    newErrors.profilePhoto = responseData[key].join(' ');
-                                }
-                            } else if (key === 'non_field_errors') {
-                                if (typeof responseData[key] === 'string') {
-                                    newErrors.general = responseData[key];
-                                } else if (Array.isArray(responseData[key])) {
-                                    newErrors.general = responseData[key].join(' ');
-                                }
-                            } else {
-                                // For any other field errors
-                                if (typeof responseData[key] === 'string') {
-                                    newErrors.general = responseData[key];
-                                } else if (Array.isArray(responseData[key])) {
-                                    newErrors.general = responseData[key].join(' ');
-                                }
-                            }
-                        }
-                    }
-                } else if (response.status === 403) {
-                    // CSRF or permission error
-                    newErrors.general = 'Security error. Please refresh the page and try again.';
-                } else if (response.status === 404) {
-                    // Endpoint not found
-                    newErrors.general = 'Registration service is currently unavailable. Please try again later.';
-                } else {
-                    // Other errors
-                    newErrors.general = 'An unexpected error occurred. Please try again.';
-                }
-                
-                setErrors(newErrors);
-                
-                // Show error alert for general errors
-                if (newErrors.general) {
-                    Swal.fire({
-                        title: 'Registration Error',
-                        text: newErrors.general,
-                        icon: 'error',
-                        confirmButtonColor: '#0d3e6e',
-                        confirmButtonText: 'OK'
-                    });
-                }
-            }
-        } catch (error) {
-            // Network errors or other exceptions
-            let errorMessage = 'An error occurred during registration. Please try again.';
-            
-            if (error.message === 'Failed to fetch') {
-                errorMessage = 'Network error. Please check your internet connection and try again.';
-            } else {
-                errorMessage = error.message || errorMessage;
-            }
-            
-            setErrors({ general: errorMessage });
-            
-            // Show error alert
-            Swal.fire({
-                title: 'Error',
-                text: errorMessage,
-                icon: 'error',
-                confirmButtonColor: '#0d3e6e',
-                confirmButtonText: 'OK'
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [formData, validateForm]);*/
+
 
     const togglePasswordVisibility = useCallback(() => {
         setShowPassword(prev => !prev);
@@ -451,7 +245,7 @@ const handleSubmit = useCallback(async (e) => {
         const suggestions = {
             username: 'Try a different username with at least 3 characters using only letters, numbers, and underscores.',
             email:'',
-            password: 'Use at least 8 characters with a mix of uppercase, lowercase letters, and numbers.',
+            password: 'Use at least 6 characters.',
             confirmPassword: 'Make sure both password fields match exactly.',
             profilePhoto: 'Upload a JPEG, PNG, GIF, or WebP image under 5MB in size.',
             general: 'Please check your information and try again. If the problem persists, contact support.'
@@ -661,9 +455,7 @@ const handleSubmit = useCallback(async (e) => {
                                 </div>
                             )}
                             
-                            <Suspense fallback={<div>Loading password strength...</div>}>
-                                <PasswordStrengthMeter password={formData.password} />
-                            </Suspense>
+                           
                         </div>
                         
                         <div className="form-group">
@@ -699,24 +491,7 @@ const handleSubmit = useCallback(async (e) => {
                                 </div>
                             )}
                         </div>
-                        
-<div className="file-upload">
-                            <Suspense fallback={<div>Loading image upload...</div>}>
-                                <ImageUploadPreview 
-                                    file={formData.profilePhoto}
-                                    onFileChange={handleChange}
-                                    fileName={fileName}
-                                                            error={errors.profilePhoto}
-                                />
-                            </Suspense>
-                            {errors.profilePhoto && (
-                                <div className="error-text">
-                                    <i className="fas fa-exclamation-triangle"></i>
-                                    <span>{errors.profilePhoto}</span>
-                                    <div className="error-suggestion">{getErrorSuggestions('profilePhoto')}</div>
-                                </div>
-                            )}
-                        </div>
+ 
                         
                         <button 
                             type="submit" 

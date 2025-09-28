@@ -6,57 +6,47 @@ import './Register.css';
 import somaselogo from '../images/somase-logo.jpeg';
 // Import the getCookie function
 import { getCookie } from '../utils/csrf';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { BASE_URL } from '../config';
 
-// Lazy load components for better performance
-const PasswordStrengthMeter = lazy(() => import('./PasswordStrengthMeter'));
-const ImageUploadPreview = lazy(() => import('./ImageUploadPreview'));
 
 const Register = () => {
     const [formData, setFormData] = useState({
         username: '',
         email: '',
         password: '',
-        confirmPassword: '',
-        profilePhoto: null
+        confirmPassword: ''
     });
     const [errors, setErrors] = useState({});
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [fileName, setFileName] = useState('No file chosen');
-    const [isRegistered, setIsRegistered] = useState(false);
+    const navigate = useNavigate();
 
     // Memoize handlers to prevent unnecessary re-renders
     const handleChange = useCallback((e) => {
-        const { name, value, files } = e.target;
-        if (name === 'profilePhoto') {
-            setFormData(prev => ({ ...prev, [name]: files[0] }));
-            setFileName(files[0] ? files[0].name : 'No file chosen');
-        } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        
+        // Clear error when user types
+        if (errors[name]) {
+            setErrors(prev => ({ ...prev, [name]: '' }));
+        }
+        
+        // Clear general errors when user types in any field
+        if (errors.general) {
+            setErrors(prev => ({ ...prev, general: '' }));
+        }
+        
+        // Password matching validation
+        if (name === 'confirmPassword' || name === 'password') {
+            const passwordValue = name === 'password' ? value : formData.password;
+            const confirmValue = name === 'confirmPassword' ? value : formData.confirmPassword;
             
-            // Clear error when user types
-            if (errors[name]) {
-                setErrors(prev => ({ ...prev, [name]: '' }));
-            }
-            
-            // Clear general errors when user types in any field
-            if (errors.general) {
-                setErrors(prev => ({ ...prev, general: '' }));
-            }
-            
-            // Password matching validation
-            if (name === 'confirmPassword' || name === 'password') {
-                const passwordValue = name === 'password' ? value : formData.password;
-                const confirmValue = name === 'confirmPassword' ? value : formData.confirmPassword;
-                
-                if (passwordValue !== confirmValue && confirmValue) {
-                    setErrors(prev => ({ ...prev, confirmPassword: 'Passwords do not match' }));
-                } else if (errors.confirmPassword) {
-                    setErrors(prev => ({ ...prev, confirmPassword: '' }));
-                }
+            if (passwordValue !== confirmValue && confirmValue) {
+                setErrors(prev => ({ ...prev, confirmPassword: 'Passwords do not match' }));
+            } else if (errors.confirmPassword) {
+                setErrors(prev => ({ ...prev, confirmPassword: '' }));
             }
         }
     }, [errors, formData.password, formData.confirmPassword]);
@@ -68,7 +58,9 @@ const Register = () => {
             newErrors.username = 'Username is required';
         } else if (formData.username.length < 3) {
             newErrors.username = 'Username must be at least 3 characters';
-        } 
+        } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+            newErrors.username = 'Username can only contain letters, numbers, and underscores';
+        }
         
         if (!formData.email) {
             newErrors.email = 'Email is required';
@@ -80,7 +72,7 @@ const Register = () => {
             newErrors.password = 'Password is required';
         } else if (formData.password.length < 6) {
             newErrors.password = 'Password must be at least 6 characters';
-        } 
+        }
         
         if (!formData.confirmPassword) {
             newErrors.confirmPassword = 'Please confirm your password';
@@ -92,146 +84,143 @@ const Register = () => {
         return Object.keys(newErrors).length === 0;
     }, [formData]);
 
+    const ensureCSRFToken = useCallback(async () => {
+        try {
+            // First, try to get the current CSRF token from cookie
+            let csrftoken = getCookie('csrftoken');
+            
+            if (!csrftoken) {
+                // If no token exists, make a GET request to get one
+                const response = await fetch(`${BASE_URL}/get-csrf/`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    csrftoken = data.csrfToken;
+                    console.log('New CSRF token obtained:', csrftoken ? 'Success' : 'Failed');
+                    
+                    // Also try to get from cookie again
+                    const cookieToken = getCookie('csrftoken');
+                    if (cookieToken) {
+                        csrftoken = cookieToken;
+                    }
+                } else {
+                    console.error('Failed to get CSRF token, status:', response.status);
+                }
+            }
+            
+            return csrftoken;
+        } catch (error) {
+            console.error('Error ensuring CSRF token:', error);
+            return null;
+        }
+    }, []);
 
-const ensureCSRFToken = useCallback(async () => {
-    try {
-        // First, try to get the current CSRF token from cookie
-        let csrftoken = getCookie('csrftoken');
+    const handleSubmit = useCallback(async (e) => {
+        e.preventDefault();
         
-        if (!csrftoken) {
-            // If no token exists, make a GET request to get one
-            const response = await fetch(`${BASE_URL}/get-csrf/`, {
-                method: 'GET',
+        if (!validateForm()) return;
+        
+        setIsSubmitting(true);
+        setErrors({}); // Clear previous errors
+        
+        try {
+            const csrftoken = await ensureCSRFToken();
+            
+            if (!csrftoken) {
+                throw new Error('Unable to get security token. Please refresh the page and try again.');
+            }
+            
+            const data = new FormData();
+            data.append('username', formData.username);
+            data.append('email', formData.email);
+            data.append('password', formData.password);
+            data.append('password2', formData.confirmPassword);
+            
+            const response = await fetch(`${BASE_URL}/register/`, {
+                method: 'POST',
                 credentials: 'include',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
                 },
+                body: data,
             });
+            
+            let responseData;
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                responseData = await response.json();
+            } else {
+                // If response is not JSON, get text for error message
+                const text = await response.text();
+                throw new Error(`Server returned unexpected format: ${text.substring(0, 100)}`);
+            }
             
             if (response.ok) {
-                const data = await response.json();
-                csrftoken = data.csrfToken;
-                console.log('New CSRF token obtained:', csrftoken ? 'Success' : 'Failed');
+                // Success handling - redirect to voting dashboard
+                await Swal.fire({
+                    title: 'Success!',
+                    text: 'Registration successful! Redirecting to dashboard...',
+                    icon: 'success',
+                    confirmButtonColor: '#0d3e6e',
+                    confirmButtonText: 'OK',
+                    timer: 3000,
+                    timerProgressBar: true
+                });
                 
-                // Also try to get from cookie again
-                const cookieToken = getCookie('csrftoken');
-                if (cookieToken) {
-                    csrftoken = cookieToken;
-                }
+                // Redirect to voting dashboard
+                navigate('/dashboard');
             } else {
-                console.error('Failed to get CSRF token, status:', response.status);
-            }
-        }
-        
-        return csrftoken;
-    } catch (error) {
-        console.error('Error ensuring CSRF token:', error);
-        return null;
-    }
-}, []);
-
-const handleSubmit = useCallback(async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
-    
-    setIsSubmitting(true);
-    setErrors({}); // Clear previous errors
-    
-    try {
-        const csrftoken = await ensureCSRFToken();
-        
-        if (!csrftoken) {
-            throw new Error('Unable to get security token. Please refresh the page and try again.');
-        }
-        
-        const data = new FormData();
-        data.append('username', formData.username);
-        data.append('email', formData.email);
-        data.append('password', formData.password);
-        data.append('password2', formData.confirmPassword);
-        if (formData.profilePhoto) {
-            data.append('profile_photo', formData.profilePhoto);
-        }
-        
-        const response = await fetch(`${BASE_URL}/register/`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                'X-CSRFToken': csrftoken,
-            },
-            body: data,
-        });
-        
-        let responseData;
-        const contentType = response.headers.get('content-type');
-        
-        if (contentType && contentType.includes('application/json')) {
-            responseData = await response.json();
-        } else {
-            // If response is not JSON, get text for error message
-            const text = await response.text();
-            throw new Error(`Server returned unexpected format: ${text.substring(0, 100)}`);
-        }
-        
-        if (response.ok) {
-            // Success handling - keep your existing success code
-            setIsRegistered(true);
-            await Swal.fire({
-                title: 'Success!',
-                html: 'Registration successful! Please check your MUBAS email to verify your account. You will be automatically logged in after verification.',
-                icon: 'success',
-                confirmButtonColor: '#0d3e6e',
-                confirmButtonText: 'OK',
-                timer: 7000,
-                timerProgressBar: true
-            });
-        } else {
-            // Error handling - simplified
-            let errorMessage = 'Registration failed. Please try again.';
-            
-            if (responseData.error) {
-                errorMessage = responseData.error;
-            } else if (responseData.details && Array.isArray(responseData.details)) {
-                errorMessage = responseData.details.join(', ');
-            } else if (typeof responseData === 'object') {
-                // Extract first error message from object
-                const firstError = Object.values(responseData)[0];
-                if (Array.isArray(firstError)) {
-                    errorMessage = firstError[0];
-                } else if (typeof firstError === 'string') {
-                    errorMessage = firstError;
+                // Error handling
+                let errorMessage = 'Registration failed. Please try again.';
+                
+                if (responseData.error) {
+                    errorMessage = responseData.error;
+                } else if (responseData.details && Array.isArray(responseData.details)) {
+                    errorMessage = responseData.details.join(', ');
+                } else if (typeof responseData === 'object') {
+                    // Extract first error message from object
+                    const firstError = Object.values(responseData)[0];
+                    if (Array.isArray(firstError)) {
+                        errorMessage = firstError[0];
+                    } else if (typeof firstError === 'string') {
+                        errorMessage = firstError;
+                    }
                 }
+                
+                throw new Error(errorMessage);
+            }
+        } catch (error) {
+            console.error('Registration error:', error);
+            
+            let errorMessage = error.message || 'An error occurred during registration. Please try again.';
+            
+            // Specific error messages for common issues
+            if (error.message.includes('CSRF') || error.message.includes('token')) {
+                errorMessage = 'Security token issue. Please refresh the page and try again.';
+            } else if (error.message.includes('network') || error.message.includes('fetch')) {
+                errorMessage = 'Network error. Please check your internet connection and try again.';
             }
             
-            throw new Error(errorMessage);
+            setErrors({ general: errorMessage });
+            
+            await Swal.fire({
+                title: 'Registration Error',
+                text: errorMessage,
+                icon: 'error',
+                confirmButtonColor: '#0d3e6e',
+                confirmButtonText: 'OK'
+            });
+        } finally {
+            setIsSubmitting(false);
         }
-    } catch (error) {
-        console.error('Registration error:', error);
-        
-        let errorMessage = error.message || 'An error occurred during registration. Please try again.';
-        
-        // Specific error messages for common issues
-        if (error.message.includes('CSRF') || error.message.includes('token')) {
-            errorMessage = 'Security token issue. Please refresh the page and try again.';
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
-            errorMessage = 'Network error. Please check your internet connection and try again.';
-        }
-        
-        setErrors({ general: errorMessage });
-        
-        await Swal.fire({
-            title: 'Registration Error',
-            text: errorMessage,
-            icon: 'error',
-            confirmButtonColor: '#0d3e6e',
-            confirmButtonText: 'OK'
-        });
-    } finally {
-        setIsSubmitting(false);
-    }
-}, [formData, validateForm]);
-
+    }, [formData, validateForm, navigate]);
 
     const togglePasswordVisibility = useCallback(() => {
         setShowPassword(prev => !prev);
@@ -244,89 +233,15 @@ const handleSubmit = useCallback(async (e) => {
     const getErrorSuggestions = (fieldName) => {
         const suggestions = {
             username: 'Try a different username with at least 3 characters using only letters, numbers, and underscores.',
-            email:'',
-            password: 'Use at least 6 characters.',
+            email: 'Please enter a valid email address.',
+            password: 'Password must be at least 6 characters long.',
             confirmPassword: 'Make sure both password fields match exactly.',
-            profilePhoto: 'Upload a JPEG, PNG, GIF, or WebP image under 5MB in size.',
             general: 'Please check your information and try again. If the problem persists, contact support.'
         };
         
         return errors[fieldName] ? suggestions[fieldName] : suggestions.general;
     };
 
-    // Render success page after registration
-    if (isRegistered) {
-        return (
-            <div className="signup-container">
-                <div className="signup-header">
-                    <div className="logo">
-                        <div className="logo-image">
-                            <img 
-                                src={somaselogo}
-                                alt="SOMASE Logo" 
-                                width="100"
-                                height="100"
-                                style={{border: '3px solid white', boxSizing: 'border-box'}}
-                            />
-                        </div>
-                        <div className="logo-text">
-                            <h1 className="logo-tagline">Registration Successful!</h1>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="signup-form" style={{textAlign: 'center', padding: '20px'}}>
-                    <div style={{marginBottom: '20px'}}>
-                        <i className="fas fa-check-circle" style={{fontSize: '48px', color: '#2ecc71'}}></i>
-                    </div>
-                    
-                    <h2 style={{color: 'var(--text-light)', marginBottom: '15px'}}>Check Your Email</h2>
-                    
-                    <p style={{color: 'var(--text-muted)', marginBottom: '25px', lineHeight: '1.5'}}>
-                        We've sent a verification link to your MUBAS email address. 
-                        Please check your inbox and click the link to verify your account.
-                    </p>
-                    
-                    <p style={{color: 'var(--text-muted)', marginBottom: '30px', lineHeight: '1.5'}}>
-                        <strong>Note:</strong> You must verify your email so that you can log in.
-                    </p>
-                    
-                    <div style={{display: 'flex', flexDirection: 'column', gap: '15px'}}>
-                        <a 
-                            href="/login" 
-                            className="signup-btn"
-                            style={{textDecoration: 'none', textAlign: 'center'}}
-                        >
-                            Go to back
-                        </a>
-                        
-                        <button 
-                            onClick={() => setIsRegistered(false)}
-                            style={{
-                                background: 'transparent',
-                                border: '1px solid var(--accent-color)',
-                                color: 'var(--accent-color)',
-                                padding: '10px',
-                                borderRadius: '8px',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Register Another Account
-                        </button>
-                    </div>
-                    
-                    <div style={{marginTop: '25px', padding: '15px', background: 'rgba(52, 152, 219, 0.1)', borderRadius: '8px'}}>
-                        <p style={{color: 'var(--text-muted)', fontSize: '14px', margin: 0}}>
-                            <i className="fas fa-info-circle" style={{marginRight: '8px'}}></i>
-                            Didn't receive the email? Check your spam folder or contact support.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // Render registration form
     return (
         <>
             <Helmet>
@@ -432,7 +347,7 @@ const handleSubmit = useCallback(async (e) => {
                                     name="password"
                                     value={formData.password}
                                     onChange={handleChange}
-                                    placeholder="Create a password" 
+                                    placeholder="Create a password (min. 6 characters)" 
                                     className={errors.password ? 'error' : ''}
                                     aria-describedby={errors.password ? 'password-error' : undefined}
                                 />
@@ -454,7 +369,6 @@ const handleSubmit = useCallback(async (e) => {
                                     <div className="error-suggestion">{getErrorSuggestions('password')}</div>
                                 </div>
                             )}
-                            
                            
                         </div>
                         
@@ -491,7 +405,6 @@ const handleSubmit = useCallback(async (e) => {
                                 </div>
                             )}
                         </div>
- 
                         
                         <button 
                             type="submit" 

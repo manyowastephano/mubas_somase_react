@@ -128,6 +128,7 @@ const Login = () => {
                     credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
                     },
                 });
                 

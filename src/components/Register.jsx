@@ -175,7 +175,7 @@ const Register = () => {
                 });
                 
                 // Redirect to voting dashboard
-                navigate('/dashboard');
+                navigate('/VotingDashboard');
             } else {
                 // Error handling
                 let errorMessage = 'Registration failed. Please try again.';

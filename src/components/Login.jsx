@@ -1,301 +1,161 @@
-// src/components/Login.js
-import React, { useState, useCallback } from 'react';
+// src/components/Login.jsx
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import './Login.css';
-import { getCookie } from '../utils/csrf';
 import somaselogo from '../images/somase-logo.jpeg';
 import Swal from 'sweetalert2';
-import { BASE_URL } from '../config';
+import { auth, googleProvider } from '../firebase'; 
+import { signInWithPopup } from 'firebase/auth';
+import { API_BASE_URL } from '../config';
+
 const Login = () => {
-    const [formData, setFormData] = useState({
-        email: '',
-        password: ''
-    });
-    const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const navigate = useNavigate();
 
-    const handleChange = useCallback((e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-        
-        // Clear error when user types
-        if (errors[name]) {
-            setErrors(prev => ({
-                ...prev,
-                [name]: ''
-            }));
-        }
-    }, [errors]);
-
-    const validateForm = useCallback(() => {
-        const newErrors = {};
-        
-        if (!formData.email) {
-            newErrors.email = 'Email is required';
-        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-            newErrors.email = 'Email address is invalid';
-        }
-        
-        if (!formData.password) {
-            newErrors.password = 'Password is required';
-        }
-        
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    }, [formData]);
-
-     
-    const ensureCSRFToken = useCallback(async () => {
-        try {
-            // First, try to get the current CSRF token from cookie
-            let csrftoken = getCookie('csrftoken');
-            
-            if (!csrftoken) {
-                // If no token exists, make a GET request to get one
-                const response = await fetch(`${BASE_URL}/get-csrf/`, {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    csrftoken = data.csrfToken;
-                    console.log('New CSRF token obtained for candidate registration:', csrftoken ? 'Success' : 'Failed');
-                    
-                    // Also try to get from cookie again
-                    const cookieToken = getCookie('csrftoken');
-                    if (cookieToken) {
-                        csrftoken = cookieToken;
-                    }
-                } else {
-                    console.error('Failed to get CSRF token, status:', response.status);
-                }
-            }
-            
-            return csrftoken;
-        } catch (error) {
-            console.error('Error ensuring CSRF token:', error);
-            return null;
-        }
-    }, []);
-    const handleSubmit = useCallback(async (e) => {
-       
-        e.preventDefault();
-        
-        if (!validateForm()) return;
-        
+    const handleGoogleLogin = async () => {
         setIsSubmitting(true);
-        setErrors({});
-        
         try {
-          //  const csrftoken = getCookie('csrftoken');
-            const csrftoken = await ensureCSRFToken();
-            const response = await fetch(`${BASE_URL}/login/`, {
+            const result = await signInWithPopup(auth, googleProvider);
+            const user = result.user;
+            const token = await user.getIdToken();
+
+            const response = await fetch(`${API_BASE_URL}/api/firebase-login/`, {
                 method: 'POST',
-                credentials: 'include',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken,
-                },
-                body: JSON.stringify({
-                    email: formData.email,
-                    password: formData.password
-                }),
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
             });
-            
-            let responseData;
+
+            const text = await response.text();
+            let data;
             try {
-                responseData = await response.json();
-            } catch (jsonError) {
-                throw new Error('Server returned an invalid response. Please try again later.');
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error("Backend returned HTML instead of JSON:", text);
+                throw new Error(`Server Error (${response.status}): Check Django terminal.`);
             }
-            
+
             if (response.ok) {
-                // Store basic user data in localStorage
-                localStorage.setItem('user', JSON.stringify(responseData));
+                localStorage.setItem('user', JSON.stringify(data.user));
                 
-                // Fetch user details including role
-                const userDetailsResponse = await fetch(`${BASE_URL}/api/auth/check/`, {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken,
-                    },
+                await Swal.fire({
+                    icon: 'success',
+                    title: 'Login Successful!',
+                    text: 'Redirecting to dashboard...',
+                    timer: 2000,
+                    showConfirmButton: false
                 });
-                
-                if (userDetailsResponse.ok) {
-                    const userDetails = await userDetailsResponse.json();
-                    
-                    // Update localStorage with complete user data including role
-                    localStorage.setItem('user', JSON.stringify({
-                        ...responseData,
-                        role: userDetails.role
-                    }));
-                    
-                    // Show success alert with SweetAlert2
-                    await Swal.fire({
-                        icon: 'success',
-                        title: 'Login Successful!',
-                        text: 'Redirecting to dashboard...',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                    
-                    // Check user role and redirect accordingly
-                    if (userDetails.role === 'voter') {
-                        navigate('/VotingDashboard');
-                    } else if (['moderator', 'president', 'vice_president'].includes(userDetails.role)) {
-                        navigate('/ElectionDashboard');
-                    } else {
-                        // Default redirect for unknown roles
-                        navigate('/VotingDashboard');
-                    }
+
+                if (data.user.role === 'voter') {
+                    navigate('/VotingDashboard');
                 } else {
-                    throw new Error('Failed to fetch user details');
+                    navigate('/ElectionDashboard');
                 }
             } else {
-                let newErrors = {};
-                
-                if (response.status >= 500) {
-                    newErrors.general = 'Server error. Please try again later.';
-                } else if (response.status === 400) {
-                    newErrors.general = 'Invalid request. Please check your input.';
-                } else if (response.status === 401) {
-                    if (responseData.error) {
-                        newErrors.general = 'Incorrect email or password.';
-                    } else {
-                        newErrors.general = 'Invalid email or password.';
-                    }
-                } else if (response.status === 403) {
-                    newErrors.general = 'Security error. Please refresh the page and try again.';
-                } else {
-                    newErrors.general = 'An unexpected error occurred. Please try again.';
-                }
-                
-                setErrors(newErrors);
-                
-                // Show error alert with SweetAlert2
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Login Failed',
-                    text: newErrors.general || 'Please check your credentials and try again.',
-                });
+                throw new Error(data.detail || 'Access Denied');
             }
+
         } catch (error) {
-            let errorMessage = 'An error occurred during login. Please try again.';
-            
-            if (error.message === 'Failed to fetch') {
-                errorMessage = 'Network error. Please check your internet connection and try again.';
-            } else {
-                errorMessage = error.message || errorMessage;
+            console.error("Login error:", error);
+            let errorMsg = error.message;
+            if (error.code === 'auth/popup-closed-by-user') {
+                errorMsg = 'Login cancelled.';
             }
-            
-            setErrors({ general: errorMessage });
-            
-            // Show error alert with SweetAlert2
-            Swal.fire({
-                icon: 'error',
-                title: 'Login Error',
-                text: errorMessage,
-            });
+            Swal.fire({ icon: 'error', title: 'Access Denied', text: errorMsg });
         } finally {
             setIsSubmitting(false);
         }
-    }, [formData, validateForm, navigate]);
+    };
 
     return (
         <>
             <Helmet>
                 <title>Login - MUBAS SOMASE Voting System</title>
-                <meta name="description" content="Login to your MUBAS SOMASE voting system account to participate in elections and manage your profile." />
-                <meta name="keywords" content="MUBAS, SOMASE, voting, election, login, account" />
-                <meta property="og:title" content="Login - MUBAS SOMASE Voting System" />
-                <meta property="og:description" content="Login to your MUBAS SOMASE voting system account." />
-                <meta property="og:type" content="website" />
-                <link rel="canonical" href="https://voting.somase.mubas.ac.mw/login" />
             </Helmet>
             
             <div className="login-container">
                 <div className="login-header">
                     <div className="logo-fish">
-                        <img 
-                            src={somaselogo}
-                            alt="SOMASE" 
-                            width="120"
-                            height="120"
-                            loading="eager"
-                        />
+                        <img src={somaselogo} alt="SOMASE" width="120" height="120" loading="eager" />
                     </div>
                     <div className="logo-tagline">Society Of Mathematical Science Students</div>
                 </div>
                 
-                <div className="login-form">
-                    {errors.general && <div className="error-message">{errors.general}</div>}
+                <div className="login-form" style={{ textAlign: 'center', padding: '20px' }}>
+                    <h3 style={{ color: 'white', marginBottom: '20px' }}>
+                        Sign in to Vote
+                    </h3>
+                    <p style={{ color: '#aaa', marginBottom: '30px', fontSize: '14px' }}>
+                        Only verified MUBAS Mathematical Sciences students are allowed.
+                    </p>
                     
-                    <form onSubmit={handleSubmit}>
-                        <div className="form-group">
-                            <label htmlFor="email">Email Address</label>
-                            <div className="input-with-icon">
-                                <i className="fas fa-envelope" aria-hidden="true"></i>
-                                <input 
-                                    type="email" 
-                                    id="email" 
-                                    name="email"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    placeholder="Enter your email address" 
-                                    className={errors.email ? 'error' : ''}
-                                    aria-describedby={errors.email ? 'email-error' : undefined}
-                                />
-                            </div>
-                            {errors.email && <div id="email-error" className="error-text">{errors.email}</div>}
-                        </div>
-                        
-                        <div className="form-group">
-                            <label htmlFor="password">Password</label>
-                            <div className="input-with-icon">
-                                <i className="fas fa-lock" aria-hidden="true"></i>
-                                <input 
-                                    type="password" 
-                                    id="password" 
-                                    name="password"
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    placeholder="Enter your password" 
-                                    className={errors.password ? 'error' : ''}
-                                    aria-describedby={errors.password ? 'password-error' : undefined}
-                                />
-                            </div>
-                            {errors.password && <div id="password-error" className="error-text">{errors.password}</div>}
-                        </div>
-                        
-                        <button 
-                            type="submit" 
-                            className="login-btn"
-                            disabled={isSubmitting}
-                            aria-busy={isSubmitting}
-                        >
-                            {isSubmitting ? 'Logging in...' : 'Login to Account'}
-                        </button>
-                        
-                        <Link to="/forgot-password" className="forgot-password">
-                            Forgot password?
+                    <button 
+                        onClick={handleGoogleLogin} 
+                        disabled={isSubmitting}
+                        style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            gap: '10px',
+                            backgroundColor: '#ffffff', // White background
+                            color: '#333333',           // Dark text
+                            fontWeight: '600',
+                            border: '1px solid #cccccc', // Light gray border
+                            borderRadius: '6px',
+                            padding: '12px 24px',
+                            width: '100%',
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                            fontSize: '16px',
+                            transition: 'background-color 0.2s ease',
+                            marginTop: '10px'
+                        }}
+                        onMouseOver={(e) => {
+                            if (!isSubmitting) e.target.style.backgroundColor = '#f8f9fa'; // Light gray on hover
+                        }}
+                        onMouseOut={(e) => {
+                            if (!isSubmitting) e.target.style.backgroundColor = '#ffffff'; // Back to white
+                        }}
+                    >
+                        {isSubmitting ? 'Signing in...' : (
+                            <>
+                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="22" />
+                                Sign in with school email
+                            </>
+                        )}
+                    </button>
+                    
+                    {/* CANDIDATE REGISTRATION LINK SECTION */}
+                    <div className="candidate-registration-link" style={{
+                        textAlign: 'center',
+                        marginTop: '30px',
+                        padding: '15px',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}>
+                        <p style={{color: '#aaaaaa', marginBottom: '10px', fontSize: '14px'}}>
+                            Want to run for a position?
+                        </p>
+                        <Link to="/CandidateRegistration" style={{
+                            display: 'inline-block',
+                            padding: '8px 16px',
+                            backgroundColor: 'transparent',
+                            color: '#3498db',
+                            border: '1px solid #3498db',
+                            borderRadius: '6px',
+                            textDecoration: 'none',
+                            fontWeight: '500',
+                            transition: 'all 0.3s ease'
+                        }} onMouseOver={(e) => {
+                            e.target.style.backgroundColor = '#3498db';
+                            e.target.style.color = 'white';
+                        }} onMouseOut={(e) => {
+                            e.target.style.backgroundColor = 'transparent';
+                            e.target.style.color = '#3498db';
+                        }}>
+                            Register as a Candidate
                         </Link>
-                    </form>
-                    
-                    <div className="divider"></div> 
-                    
-                    <div className="signup-link">
-                        Don't have an account? <Link to="/register">Register</Link>
+                        
                     </div>
                 </div>
             </div>

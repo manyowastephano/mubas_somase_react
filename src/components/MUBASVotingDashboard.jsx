@@ -580,7 +580,7 @@ const MUBASVotingDashboard = () => {
       <div className="voting-container">
         <header>
           <div className="logo"><div className="logo-img"><img src={somaselogo} alt="somase logo"/></div><div className="logo-text">SOMASE Voting</div></div>
-          <div className="user-info"><span>Welcome, {user.username}</span><div className="user-avatar">{renderUserAvatar(user)}</div></div>
+           <div className="user-info"><span>Welcome</span><div className="user-avatar">{renderUserAvatar(user)}</div></div> 
         </header>
         <div className="status-message">
           <div className="status-icon"><i className="fas fa-check-circle" style={{color: '#2ecc71'}}></i></div>
@@ -597,7 +597,7 @@ const MUBASVotingDashboard = () => {
       <div className="voting-container">
         <header>
           <div className="logo"><div className="logo-img"><img src={somaselogo} alt="somase logo"/></div><div className="logo-text">SOMASE Voting</div></div>
-          <div className="user-info"><span>Welcome, {user.username}</span><div className="user-avatar">{renderUserAvatar(user)}</div></div>
+           <div className="user-info"><span>Welcome</span><div className="user-avatar">{renderUserAvatar(user)}</div></div> 
         </header>
         <div className="status-message">
           <div className="status-icon"><i className="fas fa-user-times" style={{color: '#e74c3c'}}></i></div>
@@ -614,7 +614,7 @@ const MUBASVotingDashboard = () => {
       <header>
         <div className="logo"><div className="logo-img"><img src={somaselogo} alt="somase logo"/></div><div className="logo-text">SOMASE Voting</div></div>
         <div className="user-info">
-          {user ? (<><span>Welcome, {user.username}</span><div className="user-avatar">{renderUserAvatar(user)}</div></>) : (<><span>Please log in to vote</span><div className="user-avatar">?</div></>)}
+          {user ? (<><span>Welcome</span><div className="user-avatar">{renderUserAvatar(user)}</div></>) : (<><span>Please log in to vote</span><div className="user-avatar">?</div></>)}
         </div>
       </header>
       
@@ -636,7 +636,7 @@ const MUBASVotingDashboard = () => {
       )}
       
       <div className="dashboard-header">
-        <h1 className="dashboard-title">2025 SOMASE Elections</h1>
+        <h1 className="dashboard-title">SOMASE Elections</h1>
         <p className="dashboard-subtitle">Cast your vote for the candidates who will lead our organization forward. Your vote matters!</p>
       </div>
       

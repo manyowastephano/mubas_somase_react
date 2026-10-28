@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import { BASE_URL } from '../config';
+import { API_BASE_URL } from '../config'; // 🚨 FIX: Use API_BASE_URL
 
 const ActivationHandler = () => {
     const { uidb64, token } = useParams();
@@ -12,51 +12,47 @@ const ActivationHandler = () => {
     useEffect(() => {
         const activateAccount = async () => {
             try {
-                const response = await fetch(`${BASE_URL}/activate/${uidb64}/${token}/`, {
+                const response = await fetch(`${API_BASE_URL}/activate/${uidb64}/${token}/`, {
                     method: 'GET',
                     credentials: 'include',
                 });
 
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    setStatus('success');
-                    
-                    // Show success message
-                    await Swal.fire({
-                        title: 'Email Verified!',
-                        text: data.message || 'Your email has been verified successfully.',
-                        icon: 'success',
-                        confirmButtonColor: '#0d3e6e',
-                    });
-                    
-                    // Redirect to the appropriate dashboard
-                    window.location.href = data.redirect_url;
-                    
+                // Note: Django might return HTML instead of JSON for this view, 
+                // so we handle both cases gracefully
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        setStatus('success');
+                        await Swal.fire({
+                            title: 'Email Verified!',
+                            text: data.message || 'Your email has been verified successfully.',
+                            icon: 'success',
+                            confirmButtonColor: '#0d3e6e',
+                        });
+                        window.location.href = data.redirect_url || '/login';
+                    } else {
+                        throw new Error(data.message || 'Invalid verification link');
+                    }
                 } else {
-                    setStatus('error');
-                    
-                    await Swal.fire({
-                        title: 'Verification Failed',
-                        text: data.message || 'Invalid verification link',
-                        icon: 'error',
-                        confirmButtonColor: '#0d3e6e',
-                    });
-                    
-                    // Redirect to register page with error
-                    window.location.href = data.redirect_url || '/register';
+                    // Django returned HTML (Success or Failure page)
+                    if (response.ok) {
+                        setStatus('success');
+                        // Since it's HTML, we can't easily parse the message, just redirect
+                        window.location.href = '/login';
+                    } else {
+                        throw new Error('Verification failed');
+                    }
                 }
             } catch (error) {
                 setStatus('error');
-                
                 await Swal.fire({
-                    title: 'Error',
-                    text: 'An error occurred during verification. Please try again.',
+                    title: 'Verification Error',
+                    text: error.message || 'An error occurred during verification.',
                     icon: 'error',
                     confirmButtonColor: '#0d3e6e',
                 });
-                
-                navigate('/register');
+                navigate('/login');
             }
         };
 

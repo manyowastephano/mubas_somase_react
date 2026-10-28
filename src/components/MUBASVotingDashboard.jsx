@@ -3,8 +3,8 @@ import Swal from 'sweetalert2';
 import './votingDB.css';
 import somaselogo from '../images/somase-logo.jpeg';
 import { API_BASE_URL } from '../config';
-import { ensureCSRFToken, getCookie } from '../utils/csrf';
-import { auth } from '../firebase'; // 🚨 Import auth to get the token
+import { ensureCSRFToken } from '../utils/csrf';
+import { auth } from '../firebase'; 
 
 const MUBASVotingDashboard = () => {
   // State management
@@ -33,21 +33,35 @@ const MUBASVotingDashboard = () => {
   const [myApplication, setMyApplication] = useState(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [hasShownElectionAlert, setHasShownElectionAlert] = useState(false);
   const [hasShownEligibilityAlert, setHasShownEligibilityAlert] = useState(false);
   
   const [electionCountdown, setElectionCountdown] = useState(null);
-  const [countdownType, setCountdownType] = useState(null);
+  const [countdownType, setCountdownType] = useState(null); 
   const [electionStatus, setElectionStatus] = useState('checking'); 
 
-  // 🚨 HELPER: Get the auth headers for fetch calls
+  // 🚨 BULLETPROOF AUTH HEADERS: Waits for Firebase to initialize
   const getAuthHeaders = async () => {
-    if (auth.currentUser) {
-      const token = await auth.currentUser.getIdToken();
-      return {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
+    try {
+      if (auth.authStateReady) {
+        await auth.authStateReady();
+      } else {
+        await new Promise((resolve) => {
+          const unsubscribe = auth.onAuthStateChanged(() => {
+            unsubscribe();
+            resolve();
+          });
+        });
+      }
+
+      if (auth.currentUser) {
+        const token = await auth.currentUser.getIdToken(true); // Force refresh
+        return {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        };
+      }
+    } catch (err) {
+      console.error("Error getting auth token:", err);
     }
     return { 'Content-Type': 'application/json' };
   };
@@ -70,6 +84,129 @@ const MUBASVotingDashboard = () => {
     'organising-secretary', 'publicity-secretary', 'entertainment-director',
     'sports-director', 'society-member'
   ];
+
+  // 🚨 FIX: Only run once. Wait for Firebase before doing anything.
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      if (currentUser) {
+        fetchUserData();
+      } else {
+        localStorage.removeItem('user');
+        setUser(null);
+        setIsCheckingEligibility(false);
+      }
+    });
+
+    const savedVotes = localStorage.getItem('somasVotes');
+    if (savedVotes) {
+      const votes = JSON.parse(savedVotes);
+      setVotedCandidates(votes);
+      const positionsObj = {};
+      Object.keys(votes).forEach(position => {
+        positionsObj[position] = true;
+      });
+      setVotedPositions(positionsObj);
+    }
+
+    return () => unsubscribe();
+  }, []);
+
+  // 🚨 FIX: Fetch everything sequentially to avoid 403s
+  const fetchUserData = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/auth/check/`, {
+        headers: authHeaders,
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData)); 
+        
+        if (userData.has_voted) {
+          setHasUserVoted(true);
+          setIsCheckingEligibility(false);
+          return;
+        }
+        
+        // Fetch settings and application only after user is confirmed
+        await Promise.all([
+          fetchElectionSettings(),
+          fetchMyApplication()
+        ]);
+        
+        setIsCheckingEligibility(false);
+      } else if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem('user');
+        setUser(null);
+        setIsCheckingEligibility(false);
+      } else {
+        setIsCheckingEligibility(false);
+      }
+    } catch (err) {
+      console.error('Error fetching user data:', err);
+      setIsCheckingEligibility(false);
+    }
+  };
+
+  const fetchMyApplication = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/my-candidate-application/`, {
+        headers: authHeaders,
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const application = await response.json();
+        setMyApplication(application);
+      } else if (response.status === 404) {
+        setMyApplication(null);
+      }
+    } catch (err) {
+      console.error('Error fetching application:', err);
+    }
+  };
+
+  const fetchElectionSettings = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/election-settings/`, {
+        headers: authHeaders,
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const settings = await response.json();
+        setElectionSettings(settings);
+      }
+    } catch (err) {
+      console.error('Error fetching election settings:', err);
+    }
+  };
+
+  const fetchCandidates = async () => {
+    try {
+      setLoading(true);
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/candidates/`, {
+        headers: authHeaders,
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch candidates: ${response.status}`);
+      }
+      const data = await response.json();
+      setCandidates(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching candidates:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDeleteAccount = async () => {
     if (!user) return;
@@ -123,31 +260,6 @@ const MUBASVotingDashboard = () => {
         } finally {
             setIsDeletingAccount(false);
         }
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchMyApplication();
-    }
-  }, [user]);
-
-  const fetchMyApplication = async () => {
-    try {
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/api/my-candidate-application/`, {
-        headers: authHeaders,
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const application = await response.json();
-        setMyApplication(application);
-      } else if (response.status === 404) {
-        setMyApplication(null);
-      }
-    } catch (err) {
-      console.error('Error fetching application:', err);
     }
   };
 
@@ -209,20 +321,6 @@ const MUBASVotingDashboard = () => {
   };
 
   useEffect(() => {
-    fetchUserData();
-    const savedVotes = localStorage.getItem('somasVotes');
-    if (savedVotes) {
-      const votes = JSON.parse(savedVotes);
-      setVotedCandidates(votes);
-      const positions = {};
-      Object.keys(votes).forEach(position => {
-        positions[position] = true;
-      });
-      setVotedPositions(positions);
-    }
-  }, []);
-
-  useEffect(() => {
     const updateElectionStatus = () => {
       if (!electionSettings) return;
       const now = new Date();
@@ -265,44 +363,6 @@ const MUBASVotingDashboard = () => {
     return () => clearInterval(intervalId);
   }, [electionSettings]);
 
-  const fetchElectionSettings = async () => {
-    try {
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/api/election-settings/`, {
-        headers: authHeaders,
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const settings = await response.json();
-        setElectionSettings(settings);
-      }
-    } catch (err) {
-      console.error('Error fetching election settings:', err);
-    }
-  };
-
-  const fetchCandidates = async () => {
-    try {
-      setLoading(true);
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/api/candidates/`, {
-        headers: authHeaders,
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch candidates: ${response.status} ${response.statusText}`);
-      }
-      const data = await response.json();
-      setCandidates(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching candidates:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const checkUserEligibility = (userEmail, startYear, endYear, additionalEmails) => {
     if (additionalEmails && additionalEmails.includes(userEmail)) return true;
     const emailPattern = /^mse(\d{2})-[a-zA-Z0-9._-]+@mubas\.ac\.mw$/;
@@ -311,36 +371,6 @@ const MUBASVotingDashboard = () => {
     const emailYear = parseInt(match[1], 10);
     const fullEmailYear = 2000 + emailYear;
     return fullEmailYear >= startYear && fullEmailYear <= endYear;
-  };
-
-  const fetchUserData = async () => {
-    try {
-      const authHeaders = await getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/api/auth/check/`, {
-        headers: authHeaders,
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-        localStorage.setItem('user', JSON.stringify(userData)); 
-        if (userData.has_voted) {
-          setHasUserVoted(true);
-          setIsCheckingEligibility(false);
-          return;
-        }
-        await fetchElectionSettings();
-      } else {
-        localStorage.removeItem('user');
-        setUser(null);
-        setIsCheckingEligibility(false);
-      }
-    } catch (err) {
-      console.error('Error fetching user data:', err);
-      setUser(null);
-      setIsCheckingEligibility(false);
-    }
   };
 
   useEffect(() => {
@@ -486,10 +516,6 @@ const MUBASVotingDashboard = () => {
     window.location.href = '/login';
   };
 
-  const handleGoBack = () => {
-    window.history.back();
-  };
-
   const handlePositionChange = (e) => {
     setActivePosition(e.target.value);
   };
@@ -610,7 +636,7 @@ const MUBASVotingDashboard = () => {
       )}
       
       <div className="dashboard-header">
-        <h1 className="dashboard-title">SOMASE Elections</h1>
+        <h1 className="dashboard-title">2025 SOMASE Elections</h1>
         <p className="dashboard-subtitle">Cast your vote for the candidates who will lead our organization forward. Your vote matters!</p>
       </div>
       
